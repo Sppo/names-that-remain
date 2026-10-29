@@ -49,6 +49,24 @@ var guard_reduction: int
 ## Ability id to remaining own turns before it can be used again. Missing or 0 means ready.
 var cooldown_left: Dictionary
 
+## Base Strength (STR). Not read by the rules yet.
+var strength: int
+
+## Base Armor (ARM). Not read by the rules yet.
+var armor: int
+
+## Base Dexterity (DEX). Not read by the rules yet.
+var dexterity: int
+
+## Base Knowledge (KNO). Not read by the rules yet.
+var knowledge: int
+
+## Base Health stat (HEALTH). Not hp: current health stays in hp, the cap in max_hp.
+var health: int
+
+## Abilities of this fighter, in display and AI scan order. Ids are unique and known to AbilityCatalog.
+var ability_ids: Array[String]
+
 
 func _init() -> void:
 	id = ""
@@ -63,3 +81,9 @@ func _init() -> void:
 	block = 0
 	guard_reduction = 0
 	cooldown_left = {}
+	strength = 3
+	armor = 0
+	dexterity = 3
+	knowledge = 3
+	health = 3
+	ability_ids = []

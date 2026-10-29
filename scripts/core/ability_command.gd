@@ -7,9 +7,12 @@ extends RefCounted
 var actor_id: String
 var ability_id: String
 var target_id: String
+## Own-side position for an ability that moves the actor. 0 means unused. Not read by the rules yet.
+var destination_position: int
 
 
 func _init() -> void:
 	actor_id = ""
 	ability_id = ""
 	target_id = ""
+	destination_position = 0

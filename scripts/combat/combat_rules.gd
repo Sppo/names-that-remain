@@ -63,7 +63,7 @@ func validate_ability(command: AbilityCommand, state: CombatState) -> CombatResu
 		return CombatResult.Rejection.NOT_ACTIVE_TURN
 
 	var ability := AbilityCatalog.definition(command.ability_id)
-	if ability == null or not AbilityCatalog.ids_for(actor.id).has(command.ability_id):
+	if ability == null or not actor.ability_ids.has(command.ability_id):
 		return CombatResult.Rejection.UNKNOWN_ABILITY
 
 	if int(actor.cooldown_left.get(command.ability_id, 0)) > 0:
@@ -583,4 +583,10 @@ func _copy_combatant(source: CombatantState) -> CombatantState:
 	copy.block = source.block
 	copy.guard_reduction = source.guard_reduction
 	copy.cooldown_left = source.cooldown_left.duplicate()
+	copy.strength = source.strength
+	copy.armor = source.armor
+	copy.dexterity = source.dexterity
+	copy.knowledge = source.knowledge
+	copy.health = source.health
+	copy.ability_ids.assign(source.ability_ids)
 	return copy

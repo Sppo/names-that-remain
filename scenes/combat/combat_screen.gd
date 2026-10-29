@@ -806,7 +806,7 @@ func _refresh_actions(active: CombatantState, player_turn: bool) -> void:
 	if not player_turn or active == null:
 		return
 	_add_action_button("Крок", "", _selected_ability_id == "", true)
-	for ability_id: String in AbilityCatalog.ids_for(active.id):
+	for ability_id: String in active.ability_ids:
 		var ability := AbilityCatalog.definition(ability_id)
 		if ability == null:
 			continue
@@ -826,7 +826,7 @@ func _actions_signature(active: CombatantState, player_turn: bool) -> String:
 	for slot: int in _allowed_slots(active):
 		slots.append(str(slot))
 	parts.append(",".join(slots))
-	for ability_id: String in AbilityCatalog.ids_for(active.id):
+	for ability_id: String in active.ability_ids:
 		var left := int(active.cooldown_left.get(ability_id, 0))
 		if left > 0 or _legal_targets_for(active, ability_id).is_empty():
 			parts.append("%s:off:%d" % [ability_id, left])

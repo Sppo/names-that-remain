@@ -153,6 +153,7 @@ func _fighter(id: String, position: int, speed: int, hp: int) -> CombatantState:
 	fighter.accuracy = 100
 	fighter.dodge = 0
 	fighter.block = 0
+	fighter.ability_ids = AbilityCatalog.ids_for(id)
 	return fighter
 
 

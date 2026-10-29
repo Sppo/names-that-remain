@@ -26,7 +26,7 @@ func choose(state: CombatState) -> Variant:
 	var best_target_id := ""
 	var best_command: Variant = null
 
-	for ability_id: String in AbilityCatalog.ids_for(actor.id):
+	for ability_id: String in actor.ability_ids:
 		var ability := AbilityCatalog.definition(ability_id)
 		if ability == null or not _is_scored_kind(ability.kind):
 			continue
@@ -179,7 +179,7 @@ func _best_blow(
 ) -> Blow:
 	var best: Blow = null
 	var best_expected := -1
-	for ability_id: String in AbilityCatalog.ids_for(hero.id):
+	for ability_id: String in hero.ability_ids:
 		var ability := AbilityCatalog.definition(ability_id)
 		if not _strike_reaches(hero, ability, subject):
 			continue
@@ -288,7 +288,7 @@ func _threat(state: CombatState, fighter: CombatantState) -> int:
 
 	var best := 0
 	var heal := 0
-	for ability_id: String in AbilityCatalog.ids_for(fighter.id):
+	for ability_id: String in fighter.ability_ids:
 		var ability := AbilityCatalog.definition(ability_id)
 		if ability == null:
 			continue

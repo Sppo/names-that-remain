@@ -234,6 +234,7 @@ func _fighter(
 	fighter.accuracy = 100
 	fighter.dodge = 0
 	fighter.block = 0
+	fighter.ability_ids = AbilityCatalog.ids_for(id)
 	return fighter
 
 

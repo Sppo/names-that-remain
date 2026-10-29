@@ -45,4 +45,5 @@ static func _combatant(
 	combatant.dodge = dodge
 	combatant.block = block
 	combatant.guard_reduction = 0
+	combatant.ability_ids = AbilityCatalog.ids_for(id)
 	return combatant
