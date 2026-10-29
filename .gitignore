@@ -1,0 +1,12 @@
+# Godot 4+ version control ignores
+# https://docs.godotengine.org/en/stable/tutorials/best_practices/version_control_systems.html
+.godot/
+*.translation
+export_credentials.cfg
+
+# macOS
+.DS_Store
+._*
+
+# Local scratch
+.tmp_gut/

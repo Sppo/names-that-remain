@@ -1,0 +1,20 @@
+---
+description: Правила Godot 4 і GDScript для Names That Remain
+globs: "**/*.gd,**/*.tscn,**/*.tres,project.godot"
+alwaysApply: false
+---
+
+# Godot і GDScript
+
+- Цільовий рушій — Godot 4.7, рендерер Compatibility. Не змінюй версію рушія, рендерер і формат сейву без окремого рішення.
+- GDScript із явними типами аргументів, результату і полів.
+- У коді лише `res://` і `user://`. Не вшивай абсолютний шлях цієї машини.
+- Логіка тримається на стабільних ID (`warrior_guard`), не на видимій назві і не на шляху до вузла.
+- Сигнал сповіщає інтерфейс. Він не замінює перевірку правил.
+
+```gdscript
+func resolve(command: CombatCommand, state: CombatState, rng: RandomNumberGenerator) -> CombatResult:
+	return CombatResult.new()
+```
+
+Порожні каталоги скелета не заповнюй файлами, поки їх не потребує поточне завдання в `docs/TASKS.md`.

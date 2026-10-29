@@ -1,0 +1,195 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scenes/combat/combat_screen.gd" id="1_screen"]
+
+[node name="CombatScreen" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_screen")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0.07, 0.06, 0.08, 1)
+
+[node name="Margin" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 24
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 24
+theme_override_constants/margin_bottom = 10
+
+[node name="Column" type="VBoxContainer" parent="Margin"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 6
+alignment = 0
+
+[node name="Title" type="Label" parent="Margin/Column"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.93, 0.9, 0.84, 1)
+theme_override_font_sizes/font_size = 36
+text = "Names That Remain"
+horizontal_alignment = 1
+
+[node name="TurnLabel" type="RichTextLabel" parent="Margin/Column"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 36)
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/default_color = Color(0.97, 0.94, 0.9, 1)
+theme_override_font_sizes/normal_font_size = 20
+bbcode_enabled = true
+text = "Бій ще не зібрано."
+fit_content = false
+scroll_active = false
+autowrap_mode = 0
+
+[node name="NoticeLabel" type="Label" parent="Margin/Column"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.91, 0.58, 0.48, 1)
+theme_override_font_sizes/font_size = 18
+horizontal_alignment = 1
+autowrap_mode = 3
+
+[node name="PreparedLabel" type="Label" parent="Margin/Column"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.93, 0.78, 0.42, 1)
+theme_override_font_sizes/font_size = 18
+horizontal_alignment = 1
+autowrap_mode = 3
+
+[node name="Board" type="HBoxContainer" parent="Margin/Column"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 16
+alignment = 1
+
+[node name="HeroesColumn" type="VBoxContainer" parent="Margin/Column/Board"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 4
+
+[node name="HeroesCaption" type="Label" parent="Margin/Column/Board/HeroesColumn"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.86, 0.78, 0.58, 1)
+theme_override_font_sizes/font_size = 20
+text = "Наш загін"
+horizontal_alignment = 2
+
+[node name="HeroesRow" type="HBoxContainer" parent="Margin/Column/Board/HeroesColumn"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 10
+alignment = 2
+
+[node name="HeroesGuide" type="Label" parent="Margin/Column/Board/HeroesColumn"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.62, 0.58, 0.52, 1)
+theme_override_font_sizes/font_size = 16
+text = "4 тил          1 передова"
+horizontal_alignment = 2
+
+[node name="Divider" type="ColorRect" parent="Margin/Column/Board"]
+custom_minimum_size = Vector2(2, 0)
+layout_mode = 2
+size_flags_vertical = 3
+mouse_filter = 2
+color = Color(0.55, 0.46, 0.3, 1)
+
+[node name="EnemiesColumn" type="VBoxContainer" parent="Margin/Column/Board"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 4
+
+[node name="EnemiesCaption" type="Label" parent="Margin/Column/Board/EnemiesColumn"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.84, 0.62, 0.58, 1)
+theme_override_font_sizes/font_size = 20
+text = "Вороги"
+horizontal_alignment = 0
+
+[node name="EnemiesRow" type="HBoxContainer" parent="Margin/Column/Board/EnemiesColumn"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 10
+alignment = 0
+
+[node name="EnemiesGuide" type="Label" parent="Margin/Column/Board/EnemiesColumn"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.62, 0.58, 0.52, 1)
+theme_override_font_sizes/font_size = 16
+text = "1 передова          4 тил"
+horizontal_alignment = 0
+
+[node name="PreviewLabel" type="Label" parent="Margin/Column"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.9, 0.86, 0.78, 1)
+theme_override_font_sizes/font_size = 18
+horizontal_alignment = 1
+autowrap_mode = 3
+
+[node name="AbilityRow" type="HBoxContainer" parent="Margin/Column"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 8
+alignment = 1
+
+[node name="EventsCaption" type="Label" parent="Margin/Column"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.78, 0.74, 0.66, 1)
+theme_override_font_sizes/font_size = 18
+text = "Події"
+
+[node name="EventLog" type="RichTextLabel" parent="Margin/Column"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 72)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+mouse_filter = 2
+theme_override_colors/default_color = Color(0.84, 0.8, 0.74, 1)
+theme_override_font_sizes/normal_font_size = 18
+bbcode_enabled = true
+text = "Поки що подій немає."
+fit_content = false
+scroll_active = true
+autowrap_mode = 0
+
+[node name="RestartButton" type="Button" parent="Margin/Column"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(260, 40)
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_font_sizes/font_size = 18
+text = "Почати бій знову"
