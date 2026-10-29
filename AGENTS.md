@@ -44,4 +44,4 @@
 
 ## Поточний крок
 
-30 жовтня 2026. Етап M1, один бій. Контрольний бій 3 на 3 реалізований і заморожений: `scenes/main/main.tscn` → `scenes/combat/combat_screen.tscn`, правила в `scripts/combat/` і `scripts/core/`, GUT `tests/combat` 76/76. Нова бойова модель описана в `docs/STARTING_ABILITIES_DETAILS.md`, у коді є лише каркас її даних. Реалізація йде за `docs/COMBAT_IMPLEMENTATION_PLAN.md`: фази 0 і 1 виконані, кожна наступна фаза — лише з окремого дозволу. Systems не запускати. До M2 не переходити без окремого дозволу.
+30 жовтня 2026. Етап M1, один бій. Контрольний бій 3 на 3 реалізований і заморожений: `scenes/main/main.tscn` → `scenes/combat/combat_screen.tscn`, правила в `scripts/combat/` і `scripts/core/`, GUT `tests/combat` 121/121. Нова бойова модель описана в `docs/STARTING_ABILITIES_DETAILS.md`; у коді є каркас її даних і модуль формул `scripts/combat/combat_math.gd`, до бою ще не підключений. Реалізація йде за `docs/COMBAT_IMPLEMENTATION_PLAN.md`: фази 0, 1 і 2 завершені, кожна наступна фаза — лише з окремого дозволу. Systems не запускати. До M2 не переходити без окремого дозволу.
