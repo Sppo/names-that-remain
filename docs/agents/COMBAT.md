@@ -1,6 +1,6 @@
 # Combat
 
-Бойові правила після погодженого контракту. До погодження реалізації немає.
+Бойові правила за погодженим контрактом. Контрольний бій уже реалізований і заморожений. Нова модель — за `docs/STARTING_ABILITIES_DETAILS.md`, лише в межах фази `docs/COMBAT_IMPLEMENTATION_PLAN.md`, на яку є окремий дозвіл.
 
 ## Джерела
 
@@ -13,6 +13,9 @@
 - `docs/TECHNICAL_DESIGN.md`
 - `docs/ARCHITECTURE.md`
 - `docs/TASKS.md`
+- `docs/COMBAT_SPEC.md`
+- `docs/STARTING_ABILITIES_DETAILS.md`
+- `docs/COMBAT_IMPLEMENTATION_PLAN.md`
 
 ## Межі
 
