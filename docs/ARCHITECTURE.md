@@ -496,6 +496,12 @@ func resolve_ability(command: AbilityCommand, state: CombatState, rng: RandomNum
 - **`CombatEvent.Kind.TURN_PASSED`** — новий останній елемент `Kind`, значення інших не змінюються. `actor_id` — хто пропустив хід.
 - **ШІ.** `EnemyUtility.choose` повертає `PassCommand` лише коли немає наступальної дії, кроку вперед у порожню клітину і дозволеного «Прикрити». `EnemyAi.take_turn` більше не підставляє запасний крок: без активного бійця пропуск відхиляється атомно. `choose_step` лишився публічним, але як запасний варіант не використовується.
 
+### Фаза 8. Окремий новий бій
+
+- `BattleSetup.create_new_model_battle() -> CombatState` — окремий сценарій поруч із `create_opening_battle()`, який не змінюється. Id бійців: `warrior`, `hunter`, `medic`, `guardian`, `shadowclaw`, `cultist`. Позиції, швидкості, бази точності й ухилення, блок, характеристики і `ability_ids` — з `STARTING_ABILITIES_DETAILS.md`. `max_hp` рахує `CombatMath.max_hp` з BaseHP і HEALTH, `hp` дорівнює максимуму. Черга будується звичайним `build_turn_queue`.
+- Стенд симуляцій (`tests/simulation/`) — тестовий код, не частина гри і не ШІ гравця. Звіт — `docs/PHASE_8_SIMULATION_REPORT.md`.
+- Спосіб входу в новий бій з екрана не затверджений; екран і далі створює лише контрольний бій.
+
 ### Візуальний шар
 
 Погоджено 30 жовтня 2026, деталі — `docs/TECHNICAL_DESIGN.md` §9.1. Точні назви і методи Core визначає перед фазою 9А плану бою.
