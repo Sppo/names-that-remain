@@ -33,7 +33,7 @@ var kind: AbilityDefinition.Kind
 ## Own turns of this fighter, after a use, before the ability can be chosen again. 0 means every turn.
 var cooldown_turns: int
 
-## Fields below are not read by the rules yet. Defaults keep the control card unchanged.
+## Fields below feed the strike table in CombatRules. Defaults keep the control card unchanged.
 ## Heal and guard do not read damage_type.
 var damage_type: AbilityDefinition.DamageType
 ## Both 0: fixed base amount, no roll. Otherwise 1 <= base_min <= base_max.

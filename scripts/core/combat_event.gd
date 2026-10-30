@@ -40,7 +40,8 @@ var round_number: int
 var turn_queue: Array[String]
 var outcome: CombatState.Outcome
 var mitigation: CombatEvent.Mitigation
-## Ability damage before block, cover, and the remaining-health cap. 0 when unused.
+## Ability damage after armor, before block, cover, and the remaining-health cap. 0 when unused.
+## With armor 0 and neutral stats this is the number from the ability card.
 var listed_amount: int
 
 

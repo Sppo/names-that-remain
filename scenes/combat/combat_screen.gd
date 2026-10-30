@@ -1359,6 +1359,8 @@ func _rejection_sentence(reason: CombatResult.Rejection) -> String:
 			return "Дію відхилено: ця ціль недоступна."
 		CombatResult.Rejection.ON_COOLDOWN:
 			return "Дію відхилено: здібність ще перезаряджається."
+		CombatResult.Rejection.CALCULATION_FAILED:
+			return "Дію відхилено: бій не зміг порахувати цей удар."
 		_:
 			return "Дію відхилено."
 

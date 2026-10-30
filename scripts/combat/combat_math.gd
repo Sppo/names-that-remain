@@ -2,7 +2,7 @@ class_name CombatMath
 extends RefCounted
 
 ## Target-model formulas from docs/STARTING_ABILITIES_DETAILS.md, §3. Static, no state, no rolls.
-## Not connected to the battle, preview or AI yet.
+## The battle, the preview and enemy scoring use these through CombatRules.strike_outcome.
 ##
 ## Everything is whole-number arithmetic, so halves round exactly:
 ## - stats are hundredths of a point: 3.5 ARM is 350;

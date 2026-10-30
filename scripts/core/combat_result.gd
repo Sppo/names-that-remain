@@ -15,6 +15,8 @@ enum Rejection {
 	ACTOR_OUT_OF_POSITION,
 	ILLEGAL_TARGET,
 	ON_COOLDOWN,
+	## A combat formula could not be computed from this state. Checked before any roll.
+	CALCULATION_FAILED,
 }
 
 var accepted: bool

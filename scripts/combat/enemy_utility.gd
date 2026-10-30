@@ -4,6 +4,8 @@ extends RefCounted
 ## Scores one legal command for the active enemy.
 ## 100 points is 1 health. Every division truncates.
 ## Does not roll and does not write the passed CombatState.
+## Strike numbers come from CombatRules.strike_outcome, the same table the battle rolls on.
+## An option whose numbers fail to compute is left out, never scored as 0.
 
 const _STEP_RANK := 3
 
@@ -37,7 +39,9 @@ func choose(state: CombatState) -> Variant:
 			var command := _ability(actor.id, ability.id, target.id)
 			if _rules.validate_ability(command, state) != CombatResult.Rejection.NONE:
 				continue
-			var score := _score_ability(state, actor, ability, target)
+			var score: Variant = _score_ability(state, actor, ability, target)
+			if score == null:
+				continue
 			if _beats(found, best_score, best_rank, best_position, best_target_id, score, _kind_rank(ability.kind), target.position, target.id):
 				found = true
 				best_score = score
@@ -69,12 +73,13 @@ func choose(state: CombatState) -> Variant:
 	return best_command
 
 
+## Null when the numbers for this option could not be computed.
 func _score_ability(
 	state: CombatState,
 	actor: CombatantState,
 	ability: AbilityDefinition,
 	target: CombatantState
-) -> int:
+) -> Variant:
 	match ability.kind:
 		AbilityDefinition.Kind.STRIKE:
 			return _strike_points(state, actor, ability, target)
@@ -91,45 +96,44 @@ func _strike_points(
 	actor: CombatantState,
 	ability: AbilityDefinition,
 	target: CombatantState
-) -> int:
-	var shown := _rules.preview(actor.id, ability.id, target.id, state)
-	var blow := Blow.new(shown.hit_chance, shown.block_chance, shown.damage_on_hit, shown.damage_if_blocked)
-	var expected := _expected_points(
-		shown.hit_chance,
-		shown.block_chance,
-		mini(shown.damage_on_hit, target.hp),
-		mini(shown.damage_if_blocked, target.hp)
-	)
+) -> Variant:
+	var blow := _blow_for(actor, ability, target, target.guard_reduction)
+	var threat: Variant = _threat(state, target)
+	if blow == null or threat == null:
+		return null
+	var expected := _expected_blow_points(blow, target.hp)
 	var death := _death_percent(target.hp, [blow])
-	return expected + death * _threat(state, target)
+	return expected + death * threat
 
 
+## The rite is scored on its listed number, as if stored now, against the target's current cover.
 func _rite_points(
 	state: CombatState,
 	actor: CombatantState,
 	ability: AbilityDefinition,
 	target: CombatantState
-) -> int:
-	var shown := _preview_listed_blow(state, actor.id, ability.id, target.id, ability.amount)
-	var blow := Blow.new(shown.hit_chance, shown.block_chance, shown.damage_on_hit, shown.damage_if_blocked)
-	var expected := _expected_points(
-		shown.hit_chance,
-		shown.block_chance,
-		mini(shown.damage_on_hit, target.hp),
-		mini(shown.damage_if_blocked, target.hp)
-	)
+) -> Variant:
+	var blow := _blow_for(actor, ability, target, target.guard_reduction)
+	var threat: Variant = _threat(state, target)
+	var dying: Variant = _death_until_turn(state, actor, actor.guard_reduction)
+	if blow == null or threat == null or dying == null:
+		return null
+	var expected := _expected_blow_points(blow, target.hp)
 	var death := _death_percent(target.hp, [blow])
-	var future := expected + death * _threat(state, target)
-	var survival := 100 - _death_until_turn(state, actor, actor.guard_reduction)
+	var future: int = expected + death * threat
+	var survival: int = 100 - dying
 	return int(float(survival) * float(future) / 100.0)
 
 
-func _guard_points(state: CombatState, ability: AbilityDefinition, target: CombatantState) -> int:
+func _guard_points(state: CombatState, ability: AbilityDefinition, target: CombatantState) -> Variant:
 	if target.guard_reduction >= ability.amount:
 		return 0
-	var without := _death_until_turn(state, target, target.guard_reduction)
-	var covered := _death_until_turn(state, target, ability.amount)
-	return (without - covered) * _threat(state, target)
+	var without: Variant = _death_until_turn(state, target, target.guard_reduction)
+	var covered: Variant = _death_until_turn(state, target, ability.amount)
+	var threat: Variant = _threat(state, target)
+	if without == null or covered == null or threat == null:
+		return null
+	return (without - covered) * threat
 
 
 ## Tail after the active fighter, then one new round, stopping at subject_id.
@@ -155,7 +159,8 @@ func _ids_before(state: CombatState, subject_id: String) -> Array[String]:
 	return sequence
 
 
-func _death_until_turn(state: CombatState, subject: CombatantState, first_guard: int) -> int:
+## Null when a hero's blow could not be computed.
+func _death_until_turn(state: CombatState, subject: CombatantState, first_guard: int) -> Variant:
 	var blows: Array = []
 	for combatant_id: String in _ids_before(state, subject.id):
 		var hero := _find(state, combatant_id)
@@ -164,15 +169,18 @@ func _death_until_turn(state: CombatState, subject: CombatantState, first_guard:
 		var guard_value := 0
 		if blows.is_empty():
 			guard_value = first_guard
-		var blow: Blow = _best_blow(state, hero, subject, guard_value)
+		var blow: Blow = _best_blow(hero, subject, guard_value)
 		if blow == null:
 			continue
+		if blow.on_hit.is_empty():
+			return null
 		blows.append(blow)
 	return _death_percent(subject.hp, blows)
 
 
+## Null when no strike of this hero reaches the subject.
+## A blow with no outcomes means a reaching strike could not be computed.
 func _best_blow(
-	state: CombatState,
 	hero: CombatantState,
 	subject: CombatantState,
 	guard_value: int
@@ -183,55 +191,28 @@ func _best_blow(
 		var ability := AbilityCatalog.definition(ability_id)
 		if not _strike_reaches(hero, ability, subject):
 			continue
-		var blow := _blow_for(state, hero, ability, subject, guard_value)
-		var expected := _expected_points(
-			blow.hit,
-			blow.block,
-			mini(blow.on_hit, subject.hp),
-			mini(blow.blocked, subject.hp)
-		)
+		var blow := _blow_for(hero, ability, subject, guard_value)
+		if blow == null:
+			return Blow.new(0, 0, [], [])
+		var expected := _expected_blow_points(blow, subject.hp)
 		if best == null or expected > best_expected:
 			best = blow
 			best_expected = expected
 	return best
 
 
+## guard_value is the cover counted on the target, which may differ from the cover it has now.
+## Null when the strike could not be computed.
 func _blow_for(
-	state: CombatState,
 	actor: CombatantState,
 	ability: AbilityDefinition,
 	target: CombatantState,
 	guard_value: int
 ) -> Blow:
-	var shown := _rules.preview(actor.id, ability.id, target.id, state)
-	var on_hit := shown.damage_on_hit
-	var blocked := shown.damage_if_blocked
-	if guard_value != shown.guard_reduction:
-		on_hit = maxi(ability.amount - guard_value, 0)
-		blocked = maxi(_halve(ability.amount) - guard_value, 0)
-	return Blow.new(shown.hit_chance, shown.block_chance, on_hit, blocked)
-
-
-## Stored-rite preview of a listed blow. The original state is left untouched.
-func _preview_listed_blow(
-	state: CombatState,
-	actor_id: String,
-	ability_id: String,
-	target_id: String,
-	listed: int
-) -> AttackPreview:
-	var prepared := PreparedStrike.new()
-	prepared.actor_id = actor_id
-	prepared.ability_id = ability_id
-	prepared.target_id = target_id
-	prepared.amount = listed
-	var copy := CombatState.new()
-	copy.round_number = state.round_number
-	copy.outcome = state.outcome
-	copy.turn_queue.assign(state.turn_queue)
-	copy.combatants.assign(state.combatants)
-	copy.prepared = prepared
-	return _rules.preview(actor_id, ability_id, target_id, copy)
+	var outcome := _rules.strike_outcome(actor, target, ability, guard_value)
+	if outcome == null:
+		return null
+	return Blow.new(outcome.hit_chance, outcome.block_chance, outcome.on_hit, outcome.if_blocked)
 
 
 func _death_percent(hp: int, blows: Array) -> int:
@@ -249,21 +230,30 @@ func _death_percent(hp: int, blows: Array) -> int:
 	return int(float(dead_weight) / 100.0)
 
 
+## Branches in order: miss, then a block per base, then a clean hit per base. Each base is equally likely.
+## The last branch takes what truncation left, so the weights always sum to the parent's.
 func _apply_blow(branches: Array, blow: Blow) -> Array:
-	var part_weights: Array[int] = [
-		(100 - blow.hit) * 100,
-		blow.hit * blow.block,
-		blow.hit * (100 - blow.block),
-	]
-	var part_damage: Array[int] = [0, blow.blocked, blow.on_hit]
+	var count := blow.on_hit.size()
+	var part_weights: Array[int] = [(100 - blow.hit) * 100]
+	var part_damage: Array[int] = [0]
+	for index in count:
+		part_weights.append(blow.hit * blow.block)
+		part_damage.append(blow.blocked[index])
+	for index in count:
+		part_weights.append(blow.hit * (100 - blow.block))
+		part_damage.append(blow.on_hit[index])
+	var last := part_weights.size() - 1
 	var next: Array = []
 	for branch_index in branches.size():
 		var branch: HpWeight = branches[branch_index]
 		var given := 0
-		for part in 3:
+		for part in part_weights.size():
 			var weight := 0
-			if part < 2:
+			if part == 0:
 				weight = int(float(branch.weight) * float(part_weights[part]) / 10000.0)
+				given += weight
+			elif part < last:
+				weight = int(float(branch.weight) * float(part_weights[part]) / (10000.0 * count))
 				given += weight
 			else:
 				weight = branch.weight - given
@@ -274,17 +264,24 @@ func _apply_blow(branches: Array, blow: Blow) -> Array:
 	return next
 
 
-func _expected_points(hit: int, block: int, removed: int, removed_blocked: int) -> int:
-	var weighted := (100 - block) * removed + block * removed_blocked
-	return int(float(hit) * float(weighted) / 100.0)
+## Expected health removed, in points, averaged over the equally likely bases. Removal stops at hp.
+func _expected_blow_points(blow: Blow, hp: int) -> int:
+	var weighted := 0
+	for index in blow.on_hit.size():
+		weighted += (100 - blow.block) * mini(blow.on_hit[index], hp) + blow.block * mini(blow.blocked[index], hp)
+	return int(float(blow.hit) * float(weighted) / (100.0 * blow.on_hit.size()))
 
 
-func _threat(state: CombatState, fighter: CombatantState) -> int:
+## Largest damage this fighter's strike or rite can list before armor, or its stored blow, or its heal.
+## Null when a strike could not be computed.
+func _threat(state: CombatState, fighter: CombatantState) -> Variant:
 	var prepared := state.prepared
 	if prepared != null and prepared.actor_id == fighter.id:
 		var target := _find(state, prepared.target_id)
-		if target != null and target.hp > 0:
-			return prepared.amount
+		var stored := AbilityCatalog.definition(prepared.ability_id)
+		if target != null and target.hp > 0 and stored != null:
+			# Same unit as the strikes below: damage before armor, scaled by this fighter's stats.
+			return _rules.damage_before_armor_for(fighter, stored, prepared.amount)
 
 	var best := 0
 	var heal := 0
@@ -293,9 +290,12 @@ func _threat(state: CombatState, fighter: CombatantState) -> int:
 		if ability == null:
 			continue
 		if ability.kind == AbilityDefinition.Kind.STRIKE or ability.kind == AbilityDefinition.Kind.RITE:
-			var listed := ability.amount
-			if ability.finish_amount > listed:
-				listed = ability.finish_amount
+			var highest_base := maxi(ability.amount, ability.finish_amount)
+			if ability.base_max > 0:
+				highest_base = ability.base_max
+			var listed: Variant = _rules.damage_before_armor_for(fighter, ability, highest_base)
+			if listed == null:
+				return null
 			if listed > best:
 				best = listed
 		elif ability.kind == AbilityDefinition.Kind.HEAL and ability.amount > heal:
@@ -389,21 +389,18 @@ func _step(actor_id: String, destination: int) -> StepCommand:
 	return command
 
 
-func _halve(value: int) -> int:
-	return int(float(value) / 2.0)
-
-
+## One strike as the scoring sees it. One entry per possible base, each equally likely.
 class Blow:
 	var hit: int
 	var block: int
-	var on_hit: int
-	var blocked: int
+	var on_hit: Array[int] = []
+	var blocked: Array[int] = []
 
-	func _init(p_hit: int, p_block: int, p_on_hit: int, p_blocked: int) -> void:
+	func _init(p_hit: int, p_block: int, p_on_hit: Array[int], p_blocked: Array[int]) -> void:
 		hit = p_hit
 		block = p_block
-		on_hit = p_on_hit
-		blocked = p_blocked
+		on_hit.assign(p_on_hit)
+		blocked.assign(p_blocked)
 
 
 class HpWeight:

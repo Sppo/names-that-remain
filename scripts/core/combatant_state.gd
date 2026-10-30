@@ -34,10 +34,10 @@ var max_hp: int
 ## Name shown for this battle. Empty means the screen may show id.
 var display_name: String
 
-## Percentage from 0 to 100 used for the hit chance.
+## Base accuracy in percent. The hit chance adds 2 × (dexterity − 3); at dexterity 3 this is the final number.
 var accuracy: int
 
-## Percentage from 0 to 100 used for the hit chance.
+## Base dodge in percent. The hit chance adds dexterity − 3; at dexterity 3 this is the final number.
 var dodge: int
 
 ## Percentage chance to halve damage after a hit lands.
@@ -49,19 +49,19 @@ var guard_reduction: int
 ## Ability id to remaining own turns before it can be used again. Missing or 0 means ready.
 var cooldown_left: Dictionary
 
-## Base Strength (STR). Not read by the rules yet.
+## Base Strength (STR). Scales strikes by the ability's strength share.
 var strength: int
 
-## Base Armor (ARM). Not read by the rules yet.
+## Base Armor (ARM). Reduces physical damage before block and cover.
 var armor: int
 
-## Base Dexterity (DEX). Not read by the rules yet.
+## Base Dexterity (DEX). Adds to accuracy and dodge and scales strikes by the dexterity share.
 var dexterity: int
 
-## Base Knowledge (KNO). Not read by the rules yet.
+## Base Knowledge (KNO). Scales strikes by the knowledge share.
 var knowledge: int
 
-## Base Health stat (HEALTH). Not hp: current health stays in hp, the cap in max_hp.
+## Base Health stat (HEALTH). Not read by the rules yet. Not hp: current health stays in hp, the cap in max_hp.
 var health: int
 
 ## Abilities of this fighter, in display and AI scan order. Ids are unique and known to AbilityCatalog.
