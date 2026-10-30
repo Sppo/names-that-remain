@@ -1,0 +1,54 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scenes/combat/battle/combat_unit.gd" id="1_unit"]
+
+[node name="CombatUnit" type="Node2D"]
+script = ExtResource("1_unit")
+
+[node name="Shadow" type="Polygon2D" parent="."]
+color = Color(0, 0, 0, 0.35)
+polygon = PackedVector2Array(0, -18, 46, 0, 0, 18, -46, 0)
+
+[node name="Body" type="Polygon2D" parent="."]
+polygon = PackedVector2Array(-26, -4, -30, -96, 0, -116, 30, -96, 26, -4, 0, 6)
+
+[node name="ActiveMarker" type="Polygon2D" parent="."]
+visible = false
+color = Color(0.96, 0.82, 0.38, 1)
+polygon = PackedVector2Array(-14, -146, 14, -146, 0, -128)
+
+[node name="NameLabel" type="Label" parent="."]
+offset_left = -80.0
+offset_top = 22.0
+offset_right = 80.0
+offset_bottom = 46.0
+horizontal_alignment = 1
+
+[node name="HpBar" type="ProgressBar" parent="."]
+offset_left = -50.0
+offset_top = 48.0
+offset_right = 50.0
+offset_bottom = 58.0
+show_percentage = false
+
+[node name="HpLabel" type="Label" parent="."]
+offset_left = -60.0
+offset_top = 58.0
+offset_right = 60.0
+offset_bottom = 80.0
+horizontal_alignment = 1
+
+[node name="StatusLabel" type="Label" parent="."]
+offset_left = -90.0
+offset_top = 80.0
+offset_right = 90.0
+offset_bottom = 150.0
+horizontal_alignment = 1
+
+[node name="Floater" type="Label" parent="."]
+visible = false
+offset_left = -90.0
+offset_top = -182.0
+offset_right = 90.0
+offset_bottom = -154.0
+horizontal_alignment = 1

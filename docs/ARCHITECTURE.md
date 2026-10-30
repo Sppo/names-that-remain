@@ -502,6 +502,23 @@ func resolve_ability(command: AbilityCommand, state: CombatState, rng: RandomNum
 - Стенд симуляцій (`tests/simulation/`) — тестовий код, не частина гри і не ШІ гравця. Звіт — `docs/PHASE_8_SIMULATION_REPORT.md`.
 - Спосіб входу в новий бій з екрана не затверджений; екран і далі створює лише контрольний бій.
 
+### Фаза 9А. Контролер нового бою — погоджено власником 31 жовтня 2026 (варіант Б)
+
+`BattleController` — `scripts/combat/battle_controller.gd`, `RefCounted`, без вузлів і графіки.
+
+| Член | Сенс |
+|---|---|
+| `start(state: CombatState, seed_value: int)` | Бере готовий стан сценарію і створює свій генератор із зерном. `CombatRules` і `EnemyAi` — свої екземпляри |
+| `state: CombatState` | Поточний стан. Змінюється лише прийнятим результатом |
+| `active() -> CombatantState` | Перший у черзі або `null` |
+| `is_player_turn() -> bool` | Бій триває, контролер не в стані помилки, активний — герой |
+| `submit(command) -> CombatResult` | Команда гравця: `AbilityCommand`, `StepCommand` або `PassCommand`, лише на ході героя. Відмова — `CombatResult` з тим самим станом, контролер не змінюється |
+| `advance_enemy() -> CombatResult` | Один хід активного ворога через `EnemyAi.take_turn`. На ході героя — відмова `NOT_ACTIVE_TURN` без змін |
+| `failed: bool`, `failure: CombatResult.Rejection` | Явний стан помилки: ворожу команду відхилено. Далі контролер не грає |
+
+- Сцени генератор не бачать і бойових чисел не рахують. Події показують уже прийнятий результат; після показу вигляд звіряється зі `state`.
+- Вигляд не впливає на бій: та сама послідовність команд і зерно дають той самий стан з вузлами і без них.
+
 ### Візуальний шар
 
 Погоджено 30 жовтня 2026, деталі — `docs/TECHNICAL_DESIGN.md` §9.1. Точні назви і методи Core визначає перед фазою 9А плану бою.
