@@ -124,7 +124,8 @@ func resolve_ability(command: AbilityCommand, state: CombatState, rng: RandomNum
 
 ## Plays the active actor's stored strike with the same hit and block rolls as a strike.
 ## The strike spends the turn. If the actor was removed first, the record is already clear.
-## A formula that fails rejects with CALCULATION_FAILED before any roll and leaves the passed state as it was.
+## A formula that fails cancels the record, spends the turn, and rolls nothing.
+## An ordinary command still rejects with CALCULATION_FAILED and leaves its state untouched.
 func resolve_prepared_strike(state: CombatState, rng: RandomNumberGenerator) -> CombatResult:
 	var next := _copy_state(state)
 	var events: Array[CombatEvent] = []
@@ -147,9 +148,14 @@ func resolve_prepared_strike(state: CombatState, rng: RandomNumberGenerator) -> 
 	if ability == null:
 		push_error("CombatRules.resolve_prepared_strike: unknown ability %s" % prepared.ability_id)
 		return CombatResult.rejected(state, CombatResult.Rejection.CALCULATION_FAILED)
-	var outcome := stored_strike_outcome(actor, target, ability, prepared.amount, target.guard_reduction)
+	# A special rite is recalculated now. The control rite still uses the stored number.
+	var outcome: StrikeOutcome = null
+	if ability.damage_type == AbilityDefinition.DamageType.SPECIAL:
+		outcome = strike_outcome(actor, target, ability, target.guard_reduction)
+	else:
+		outcome = stored_strike_outcome(actor, target, ability, prepared.amount, target.guard_reduction)
 	if outcome == null:
-		return CombatResult.rejected(state, CombatResult.Rejection.CALCULATION_FAILED)
+		return _cancel_prepared_strike(next, prepared, events)
 
 	_resolve_hit(actor, target, prepared.ability_id, outcome, rng, events)
 	next.prepared = null
@@ -157,6 +163,24 @@ func resolve_prepared_strike(state: CombatState, rng: RandomNumberGenerator) -> 
 		_expel_non_positive_hp(next, events)
 	_close_actor_turn(next, actor.id, events, "")
 	return CombatResult.resolved(next, events)
+
+
+## The stored strike cannot be calculated. Drop it, spend the turn, and do not roll or deal damage.
+func _cancel_prepared_strike(
+	state: CombatState,
+	prepared: PreparedStrike,
+	events: Array[CombatEvent]
+) -> CombatResult:
+	var actor_id := prepared.actor_id
+	state.prepared = null
+	events.append(CombatEvent.prepared_strike_cancelled(
+		actor_id,
+		prepared.ability_id,
+		prepared.target_id,
+		CombatResult.Rejection.CALCULATION_FAILED
+	))
+	_close_actor_turn(state, actor_id, events, "")
+	return CombatResult.resolved(state, events)
 
 
 ## Copy with the stored strike removed. Does not spend the turn and does not emit events.
@@ -182,7 +206,13 @@ func preview(actor_id: String, ability_id: String, target_id: String, state: Com
 		if _stored_rite(state, actor_id, ability_id, target_id):
 			if actor == null or target == null:
 				return shown
+			if ability.damage_type == AbilityDefinition.DamageType.SPECIAL:
+				return _strike_preview(strike_outcome(actor, target, ability, target.guard_reduction))
 			return _strike_preview(stored_strike_outcome(actor, target, ability, state.prepared.amount, target.guard_reduction))
+		if ability.damage_type == AbilityDefinition.DamageType.SPECIAL:
+			if actor == null or target == null:
+				return shown
+			return _strike_preview(strike_outcome(actor, target, ability, target.guard_reduction))
 		# Not stored yet: only the damage it would list, without hit chance or defences.
 		if actor == null:
 			return shown
@@ -225,11 +255,16 @@ func stored_strike_outcome(
 	return _outcome_for_base(actor, target, ability, stored_base, guard)
 
 
-## round_half_up(base × A × M(P) × M_dealt) with this fighter's stats.
-## M_dealt is the capped physical-damage-dealt category. Incoming modifiers stay neutral:
-## special damage received is not physical, and no starting effect changes physical damage received.
-## Null when a formula fails.
-func damage_before_armor_for(actor: CombatantState, ability: AbilityDefinition, base: int) -> Variant:
+## round_half_up(base × A × M(P) × M_dealt × M_received) with this fighter's stats.
+## Physical damage uses the dealt category and a neutral received multiplier.
+## Special damage uses the target's received category and does not take physical dealt bonuses.
+## target may be null when the number is not aimed at anyone yet. Null when a formula fails.
+func damage_before_armor_for(
+	actor: CombatantState,
+	ability: AbilityDefinition,
+	base: int,
+	target: CombatantState = null
+) -> Variant:
 	var strength: Variant = CombatMath.effective_stat_x100(actor.strength, 0, 0)
 	var dexterity: Variant = CombatMath.effective_stat_x100(actor.dexterity, 0, 0)
 	var knowledge: Variant = CombatMath.effective_stat_x100(actor.knowledge, 0, 0)
@@ -245,9 +280,15 @@ func damage_before_armor_for(actor: CombatantState, ability: AbilityDefinition, 
 	)
 	if weighted == null:
 		return null
-	var dealt := _category_multiplier(actor, ActiveEffect.Kind.PHYSICAL_DEALT_PERCENT)
 	var neutral := CombatMath.category_multiplier_percent(0)
-	return CombatMath.damage_before_armor(base, ability.multiplier_percent, weighted, dealt, neutral)
+	var dealt := neutral
+	var received := neutral
+	if ability.damage_type == AbilityDefinition.DamageType.SPECIAL:
+		if target != null:
+			received = special_received_multiplier_percent(target)
+	else:
+		dealt = _category_multiplier(actor, ActiveEffect.Kind.PHYSICAL_DEALT_PERCENT)
+	return CombatMath.damage_before_armor(base, ability.multiplier_percent, weighted, dealt, received)
 
 
 ## Orders whoever is still listed. Higher speed, then heroes, then front to back.
@@ -387,6 +428,10 @@ func _resolve_hit(
 	rng: RandomNumberGenerator,
 	events: Array[CombatEvent]
 ) -> void:
+	if outcome.guaranteed:
+		_apply_damage(actor, target, ability_id, outcome, 0, events, false)
+		return
+
 	var hit_roll := rng.randi_range(1, 100)
 	if hit_roll > outcome.hit_chance:
 		events.append(CombatEvent.missed(actor.id, ability_id, target.id))
@@ -396,6 +441,10 @@ func _resolve_hit(
 	if outcome.bases.size() > 1:
 		var lowest: int = outcome.bases[0]
 		index = rng.randi_range(lowest, outcome.bases[outcome.bases.size() - 1]) - lowest
+
+	if outcome.special:
+		_apply_damage(actor, target, ability_id, outcome, index, events, false)
+		return
 
 	var damage: int = outcome.on_hit[index]
 	var blocked := false
@@ -432,8 +481,34 @@ func _mitigation(blocked: bool, guarded: bool) -> CombatEvent.Mitigation:
 	return CombatEvent.Mitigation.NONE
 
 
+func _apply_damage(
+	actor: CombatantState,
+	target: CombatantState,
+	ability_id: String,
+	outcome: StrikeOutcome,
+	index: int,
+	events: Array[CombatEvent],
+	spend_guard: bool
+) -> void:
+	var damage: int = outcome.on_hit[index]
+	if spend_guard and target.guard_reduction > 0:
+		target.guard_reduction = 0
+	var removed := mini(maxi(damage, 0), target.hp)
+	target.hp -= removed
+	events.append(CombatEvent.damage_applied(
+		actor.id,
+		ability_id,
+		target.id,
+		removed,
+		target.hp,
+		outcome.listed[index],
+		CombatEvent.Mitigation.NONE
+	))
+
+
 ## Physical strike table. Order per base: damage before armor, armor, then block and cover.
-## Special damage and guaranteed hits come in phase 5 and fail here instead of passing as physical.
+## Special damage skips armor, block and cover, and does not spend the cover.
+## A guaranteed hit is a property of the ability, not of every special attack. A physical guaranteed hit is not supported.
 ## Block chance is the fighter's number plus block effects, capped at 95.
 func _outcome_for_base(
 	actor: CombatantState,
@@ -442,8 +517,12 @@ func _outcome_for_base(
 	fixed_base: int,
 	guard: int
 ) -> StrikeOutcome:
-	if ability.damage_type != AbilityDefinition.DamageType.PHYSICAL or ability.guaranteed_hit:
-		push_error("CombatRules: %s needs special damage or a guaranteed hit, which are not supported yet" % ability.id)
+	var special := ability.damage_type == AbilityDefinition.DamageType.SPECIAL
+	if ability.damage_type != AbilityDefinition.DamageType.PHYSICAL and not special:
+		push_error("CombatRules: %s has an unsupported damage type" % ability.id)
+		return null
+	if ability.guaranteed_hit and not special:
+		push_error("CombatRules: %s guarantees a hit without special damage, which is not supported" % ability.id)
 		return null
 	var has_range := ability.base_min != 0 or ability.base_max != 0
 	if has_range and (ability.base_min < 1 or ability.base_min > ability.base_max):
@@ -452,20 +531,29 @@ func _outcome_for_base(
 
 	var actor_dexterity: Variant = CombatMath.effective_stat_x100(actor.dexterity, 0, 0)
 	var target_dexterity: Variant = CombatMath.effective_stat_x100(target.dexterity, 0, 0)
-	var armor: Variant = CombatMath.effective_stat_x100(target.armor, 0, 0)
-	if actor_dexterity == null or target_dexterity == null or armor == null:
+	var armor: Variant = null
+	if not special:
+		armor = CombatMath.effective_stat_x100(target.armor, 0, 0)
+	if actor_dexterity == null or target_dexterity == null or (not special and armor == null):
 		return null
-	var accuracy: Variant = CombatMath.accuracy_x100(actor.accuracy, actor_dexterity, ability.accuracy_bonus)
-	var dodge_bonus := _effect_total(target, ActiveEffect.Kind.DODGE_POINTS)
-	var dodge: Variant = CombatMath.dodge_x100(target.dodge, target_dexterity, dodge_bonus)
-	if accuracy == null or dodge == null:
-		return null
-	var block: Variant = CombatMath.block_chance(target.block, _effect_total(target, ActiveEffect.Kind.BLOCK_POINTS))
-	if block == null:
-		return null
+	var hit := 100
+	if not ability.guaranteed_hit:
+		var accuracy: Variant = CombatMath.accuracy_x100(actor.accuracy, actor_dexterity, ability.accuracy_bonus)
+		var dodge_bonus := _effect_total(target, ActiveEffect.Kind.DODGE_POINTS)
+		var dodge: Variant = CombatMath.dodge_x100(target.dodge, target_dexterity, dodge_bonus)
+		if accuracy == null or dodge == null:
+			return null
+		hit = CombatMath.hit_chance(accuracy, dodge)
+	var block: Variant = 0
+	if not special:
+		block = CombatMath.block_chance(target.block, _effect_total(target, ActiveEffect.Kind.BLOCK_POINTS))
+		if block == null:
+			return null
 
 	var outcome := StrikeOutcome.new()
-	outcome.hit_chance = CombatMath.hit_chance(accuracy, dodge)
+	outcome.special = special
+	outcome.guaranteed = ability.guaranteed_hit
+	outcome.hit_chance = hit
 	outcome.block_chance = block
 	outcome.guard = guard
 	if has_range:
@@ -475,9 +563,14 @@ func _outcome_for_base(
 		outcome.bases.append(fixed_base)
 
 	for value: int in outcome.bases:
-		var before_armor: Variant = damage_before_armor_for(actor, ability, value)
+		var before_armor: Variant = damage_before_armor_for(actor, ability, value, target if special else null)
 		if before_armor == null:
 			return null
+		if special:
+			outcome.listed.append(before_armor)
+			outcome.on_hit.append(before_armor)
+			outcome.if_blocked.append(before_armor)
+			continue
 		var after_armor: Variant = CombatMath.damage_after_armor(before_armor, armor)
 		if after_armor == null:
 			return null
@@ -874,7 +967,11 @@ class StrikeOutcome:
 	## Cover counted on the target in on_hit and if_blocked.
 	var guard: int
 	var bases: Array[int] = []
-	## Damage after armor, before block and cover. This is the event's listed_amount.
+	## True when this strike skips armor, block and cover.
+	var special: bool
+	## True when the strike lands without a hit roll.
+	var guaranteed: bool
+	## Damage after armor, before block and cover. For special damage this is the whole hit. This is the event's listed_amount.
 	var listed: Array[int] = []
 	## After armor and cover, without block. Not capped by the target's health.
 	var on_hit: Array[int] = []

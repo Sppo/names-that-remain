@@ -280,6 +280,11 @@ func _threat(state: CombatState, fighter: CombatantState) -> Variant:
 		var target := _find(state, prepared.target_id)
 		var stored := AbilityCatalog.definition(prepared.ability_id)
 		if target != null and target.hp > 0 and stored != null:
+			if stored.damage_type == AbilityDefinition.DamageType.SPECIAL:
+				var outcome := _rules.strike_outcome(fighter, target, stored, target.guard_reduction)
+				if outcome == null or outcome.listed.is_empty():
+					return null
+				return outcome.listed.max()
 			# Same unit as the strikes below: damage before armor, scaled by this fighter's stats.
 			return _rules.damage_before_armor_for(fighter, stored, prepared.amount)
 

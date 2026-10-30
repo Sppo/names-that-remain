@@ -32,6 +32,8 @@ static func definition(ability_id: String) -> AbilityDefinition:
 			return _make("warrior_guard", "Прикрити", 1, 2, 1, 4, 10, false, AbilityDefinition.Kind.GUARD, 1)
 		"cultist_rite":
 			return _make("cultist_rite", "Обряд", 2, 4, 3, 4, 14, true, AbilityDefinition.Kind.RITE, 2)
+		"cultist_prepared_rite":
+			return _prepared_rite()
 		"shadowclaw_claws":
 			return _make("shadowclaw_claws", "Кігті", 1, 4, 1, 4, 5, true, AbilityDefinition.Kind.STRIKE, 0)
 		"shadowclaw_execute":
@@ -86,6 +88,16 @@ static func _make(
 	ability.hits_enemies = hits_enemies
 	ability.kind = kind
 	ability.cooldown_turns = cooldown_turns
+	return ability
+
+
+## New ritual. Not on the control cultist's list: that battle keeps cultist_rite.
+static func _prepared_rite() -> AbilityDefinition:
+	var ability := _make("cultist_prepared_rite", "Підготовлений обряд", 2, 4, 3, 4, 11, true, AbilityDefinition.Kind.RITE, 2)
+	ability.damage_type = AbilityDefinition.DamageType.SPECIAL
+	ability.knowledge_percent = 100
+	ability.multiplier_percent = 100
+	ability.guaranteed_hit = true
 	return ability
 
 

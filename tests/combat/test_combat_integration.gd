@@ -423,17 +423,28 @@ func test_failed_formula_rejects_without_rolling_or_writing() -> void:
 	assert_push_error_count(1)
 
 
-func test_failed_formula_on_a_stored_rite_rejects_without_rolling() -> void:
+func test_failed_formula_on_a_stored_rite_cancels_without_rolling() -> void:
 	var state := _rite_on_doctor(14)
 	_find(state, "hero-3").armor = -1
 	var before := _snapshot(state)
+	var doctor_hp := _find(state, "hero-3").hp
 	var rng := _rng(3)
 	var rng_state := rng.state
 	var result := rules.resolve_prepared_strike(state, rng)
-	assert_false(result.accepted)
-	assert_eq(result.rejection, CombatResult.Rejection.CALCULATION_FAILED)
+	assert_true(result.accepted)
+	assert_eq(result.rejection, CombatResult.Rejection.NONE)
 	assert_eq(rng.state, rng_state)
 	assert_eq(_snapshot(state), before)
+	assert_null(result.state.prepared)
+	assert_eq(result.state.turn_queue[0], "enemy-3")
+	assert_eq(_find(result.state, "hero-3").hp, doctor_hp)
+	assert_eq(result.events.size(), 1)
+	assert_eq(result.events[0].kind, CombatEvent.Kind.PREPARED_STRIKE_CANCELLED)
+	assert_eq(result.events[0].rejection, CombatResult.Rejection.CALCULATION_FAILED)
+	assert_eq(result.events[0].ability_id, "cultist_rite")
+	assert_eq(result.events[0].actor_id, "enemy-2")
+	assert_eq(result.events[0].other_id, "hero-3")
+	assert_eq(result.events[0].amount, 0)
 	assert_push_error_count(1)
 
 
@@ -462,13 +473,21 @@ func test_unstored_rite_preview_lists_one_number() -> void:
 
 func test_special_damage_is_not_passed_off_as_physical() -> void:
 	var state := BattleSetup.create_opening_battle()
+	var enemy := _find(state, "enemy-1")
+	enemy.armor = 20
 	var card := _ranged_card()
 	card.damage_type = AbilityDefinition.DamageType.SPECIAL
-	assert_null(rules.strike_outcome(_find(state, "hero-1"), _find(state, "enemy-1"), card, 0))
+	var special := rules.strike_outcome(_find(state, "hero-1"), enemy, card, 10)
+	assert_not_null(special)
+	assert_eq(special.block_chance, 0)
+	assert_false(special.guaranteed)
+	assert_eq(special.on_hit, [4, 5, 6] as Array[int])
+	var physical := rules.strike_outcome(_find(state, "hero-1"), enemy, _ranged_card(), 10)
+	assert_ne(physical.on_hit[0], special.on_hit[0])
 	var guaranteed := _ranged_card()
 	guaranteed.guaranteed_hit = true
-	assert_null(rules.strike_outcome(_find(state, "hero-1"), _find(state, "enemy-1"), guaranteed, 0))
-	assert_push_error_count(2)
+	assert_null(rules.strike_outcome(_find(state, "hero-1"), enemy, guaranteed, 0))
+	assert_push_error_count(1)
 
 
 func test_enemy_skips_options_it_cannot_compute() -> void:

@@ -18,6 +18,8 @@ enum Kind {
 	GUARD_PLACED,
 	EFFECT_APPLIED,
 	EFFECT_EXPIRED,
+	## A stored strike was dropped while resolving it. No health change and no roll.
+	PREPARED_STRIKE_CANCELLED,
 }
 
 ## How a landed hit was reduced. NONE means the listed hit was not reduced.
@@ -47,6 +49,8 @@ var mitigation: CombatEvent.Mitigation
 var listed_amount: int
 ## Set on EFFECT_APPLIED and EFFECT_EXPIRED. Empty for every other kind.
 var effect_id: String
+## Set on PREPARED_STRIKE_CANCELLED. NONE for every other kind.
+var rejection: CombatResult.Rejection
 
 
 func _init() -> void:
@@ -66,6 +70,7 @@ func _init() -> void:
 	mitigation = CombatEvent.Mitigation.NONE
 	listed_amount = 0
 	effect_id = ""
+	rejection = CombatResult.Rejection.NONE
 
 
 static func stepped(actor_id: String, from_position: int, to_position: int) -> CombatEvent:
@@ -158,6 +163,22 @@ static func prepared_strike(
 	event.ability_id = ability_id
 	event.other_id = target_id
 	event.amount = amount
+	return event
+
+
+## The stored strike will not land. reason says why. Health and the generator stay untouched.
+static func prepared_strike_cancelled(
+	actor_id: String,
+	ability_id: String,
+	target_id: String,
+	reason: CombatResult.Rejection
+) -> CombatEvent:
+	var event := CombatEvent.new()
+	event.kind = CombatEvent.Kind.PREPARED_STRIKE_CANCELLED
+	event.actor_id = actor_id
+	event.ability_id = ability_id
+	event.other_id = target_id
+	event.rejection = reason
 	return event
 
 

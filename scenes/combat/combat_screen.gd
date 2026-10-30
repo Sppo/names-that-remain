@@ -1161,6 +1161,8 @@ func _record_exchange(events: Array[CombatEvent]) -> void:
 			CombatEvent.Kind.PREPARED_STRIKE:
 				allies.append(_name_of(event.other_id))
 				enemies.append("%s готує удар на %d" % [_name_of(event.actor_id), event.amount])
+			CombatEvent.Kind.PREPARED_STRIKE_CANCELLED:
+				notes.append("%s: підготовлений удар скасовано, формулу не вдалося порахувати." % _name_of(event.actor_id))
 			CombatEvent.Kind.STEPPED:
 				_put_for_actor(event.actor_id, "%s на позицію %d" % [_name_of(event.actor_id), event.to_position], allies, enemies)
 			CombatEvent.Kind.SWAPPED:
@@ -1312,6 +1314,8 @@ func _event_line(event: CombatEvent) -> String:
 				_name_of(event.other_id),
 				event.amount,
 			]
+		CombatEvent.Kind.PREPARED_STRIKE_CANCELLED:
+			return "%s: підготовлений удар скасовано, формулу не вдалося порахувати." % _name_of(event.actor_id)
 		CombatEvent.Kind.MISSED:
 			return "%s промахується: «%s» по %s." % [
 				_name_of(event.actor_id),
