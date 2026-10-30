@@ -17,6 +17,8 @@ enum Rejection {
 	ON_COOLDOWN,
 	## A combat formula could not be computed from this state. Checked before any roll.
 	CALCULATION_FAILED,
+	## An effect had no id, a duration below 1, or a different kind under an id already active.
+	INVALID_EFFECT,
 }
 
 var accepted: bool

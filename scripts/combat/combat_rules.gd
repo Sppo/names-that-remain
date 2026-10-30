@@ -225,7 +225,9 @@ func stored_strike_outcome(
 	return _outcome_for_base(actor, target, ability, stored_base, guard)
 
 
-## round_half_up(base × A × M(P)) with this fighter's stats. Damage modifiers stay neutral until effects exist.
+## round_half_up(base × A × M(P) × M_dealt) with this fighter's stats.
+## M_dealt is the capped physical-damage-dealt category. Incoming modifiers stay neutral:
+## special damage received is not physical, and no starting effect changes physical damage received.
 ## Null when a formula fails.
 func damage_before_armor_for(actor: CombatantState, ability: AbilityDefinition, base: int) -> Variant:
 	var strength: Variant = CombatMath.effective_stat_x100(actor.strength, 0, 0)
@@ -243,8 +245,9 @@ func damage_before_armor_for(actor: CombatantState, ability: AbilityDefinition, 
 	)
 	if weighted == null:
 		return null
+	var dealt := _category_multiplier(actor, ActiveEffect.Kind.PHYSICAL_DEALT_PERCENT)
 	var neutral := CombatMath.category_multiplier_percent(0)
-	return CombatMath.damage_before_armor(base, ability.multiplier_percent, weighted, neutral, neutral)
+	return CombatMath.damage_before_armor(base, ability.multiplier_percent, weighted, dealt, neutral)
 
 
 ## Orders whoever is still listed. Higher speed, then heroes, then front to back.
@@ -431,7 +434,7 @@ func _mitigation(blocked: bool, guarded: bool) -> CombatEvent.Mitigation:
 
 ## Physical strike table. Order per base: damage before armor, armor, then block and cover.
 ## Special damage and guaranteed hits come in phase 5 and fail here instead of passing as physical.
-## Block chance stays the fighter's number: the 95% cap arrives with effects in phase 4.
+## Block chance is the fighter's number plus block effects, capped at 95.
 func _outcome_for_base(
 	actor: CombatantState,
 	target: CombatantState,
@@ -453,13 +456,17 @@ func _outcome_for_base(
 	if actor_dexterity == null or target_dexterity == null or armor == null:
 		return null
 	var accuracy: Variant = CombatMath.accuracy_x100(actor.accuracy, actor_dexterity, ability.accuracy_bonus)
-	var dodge: Variant = CombatMath.dodge_x100(target.dodge, target_dexterity, 0)
+	var dodge_bonus := _effect_total(target, ActiveEffect.Kind.DODGE_POINTS)
+	var dodge: Variant = CombatMath.dodge_x100(target.dodge, target_dexterity, dodge_bonus)
 	if accuracy == null or dodge == null:
+		return null
+	var block: Variant = CombatMath.block_chance(target.block, _effect_total(target, ActiveEffect.Kind.BLOCK_POINTS))
+	if block == null:
 		return null
 
 	var outcome := StrikeOutcome.new()
 	outcome.hit_chance = CombatMath.hit_chance(accuracy, dodge)
-	outcome.block_chance = target.block
+	outcome.block_chance = block
 	outcome.guard = guard
 	if has_range:
 		for value in range(ability.base_min, ability.base_max + 1):
@@ -545,6 +552,7 @@ func _close_actor_turn(
 	if actor != null:
 		_tick_cooldowns(actor, used_ability_id)
 		_arm_cooldown(actor, used_ability_id)
+		_tick_effects(actor, events)
 	_spend_active_turn(state, actor_id, events)
 
 
@@ -724,7 +732,139 @@ func _copy_combatant(source: CombatantState) -> CombatantState:
 	copy.knowledge = source.knowledge
 	copy.health = source.health
 	copy.ability_ids.assign(source.ability_ids)
+	for index in source.effects.size():
+		copy.effects.append(source.effects[index].duplicate_effect())
 	return copy
+
+
+## Puts an effect on a living target. Does not spend the turn and does not roll.
+## Success returns a copy. Rejection returns the same state object.
+## A weaker repeat of the same effect_id changes nothing and emits no event.
+func grant_effect(
+	state: CombatState,
+	source_id: String,
+	target_id: String,
+	template: ActiveEffect
+) -> CombatResult:
+	var rejection := _validate_grant(state, target_id, template)
+	if rejection != CombatResult.Rejection.NONE:
+		return CombatResult.rejected(state, rejection)
+
+	var next := _copy_state(state)
+	var events: Array[CombatEvent] = []
+	_grant_on(next, source_id, target_id, template, events)
+	return CombatResult.resolved(next, events)
+
+
+## Capped multiplier of special damage received, 100 meaning ×1. Physical strikes do not call this.
+func special_received_multiplier_percent(combatant: CombatantState) -> int:
+	return _category_multiplier(combatant, ActiveEffect.Kind.SPECIAL_RECEIVED_PERCENT)
+
+
+func _validate_grant(
+	state: CombatState,
+	target_id: String,
+	template: ActiveEffect
+) -> CombatResult.Rejection:
+	if state.outcome != CombatState.Outcome.ONGOING:
+		return CombatResult.Rejection.BATTLE_FINISHED
+	if template == null or template.effect_id == "" or template.turns_left < 1:
+		return CombatResult.Rejection.INVALID_EFFECT
+	var target := _find(state, target_id)
+	if target == null or target.hp <= 0:
+		return CombatResult.Rejection.ILLEGAL_TARGET
+	var existing := _effect_index(target, template.effect_id)
+	if existing >= 0 and target.effects[existing].kind != template.kind:
+		return CombatResult.Rejection.INVALID_EFFECT
+	return CombatResult.Rejection.NONE
+
+
+func _grant_on(
+	state: CombatState,
+	source_id: String,
+	target_id: String,
+	template: ActiveEffect,
+	events: Array[CombatEvent]
+) -> void:
+	var target := _find(state, target_id)
+	var skip := _target_is_active(state, target_id)
+	var existing := _effect_index(target, template.effect_id)
+	if existing >= 0:
+		var current: ActiveEffect = target.effects[existing]
+		if _strength(template) < _strength(current):
+			return
+		current.magnitude = template.magnitude
+		current.turns_left = template.turns_left
+		current.skips_next_tick = skip
+	else:
+		var created := ActiveEffect.new()
+		created.effect_id = template.effect_id
+		created.kind = template.kind
+		created.magnitude = template.magnitude
+		created.turns_left = template.turns_left
+		created.skips_next_tick = skip
+		target.effects.append(created)
+	events.append(CombatEvent.effect_applied(
+		source_id,
+		target_id,
+		template.effect_id,
+		template.magnitude,
+		template.turns_left
+	))
+
+
+## Own-turn end. An effect applied this turn only loses the skip mark.
+func _tick_effects(actor: CombatantState, events: Array[CombatEvent]) -> void:
+	var kept: Array[ActiveEffect] = []
+	for index in actor.effects.size():
+		var effect: ActiveEffect = actor.effects[index]
+		if effect.skips_next_tick:
+			effect.skips_next_tick = false
+			kept.append(effect)
+			continue
+		effect.turns_left -= 1
+		if effect.turns_left > 0:
+			kept.append(effect)
+		else:
+			events.append(CombatEvent.effect_expired(actor.id, effect.effect_id, effect.magnitude))
+	actor.effects = kept
+
+
+func _target_is_active(state: CombatState, target_id: String) -> bool:
+	return (
+		state.outcome == CombatState.Outcome.ONGOING
+		and not state.turn_queue.is_empty()
+		and state.turn_queue[0] == target_id
+	)
+
+
+func _effect_index(combatant: CombatantState, effect_id: String) -> int:
+	for index in combatant.effects.size():
+		if combatant.effects[index].effect_id == effect_id:
+			return index
+	return -1
+
+
+func _effect_total(combatant: CombatantState, kind: ActiveEffect.Kind) -> int:
+	if combatant == null:
+		return 0
+	var total := 0
+	for index in combatant.effects.size():
+		var effect: ActiveEffect = combatant.effects[index]
+		if effect.kind == kind:
+			total += effect.magnitude
+	return total
+
+
+func _category_multiplier(combatant: CombatantState, kind: ActiveEffect.Kind) -> int:
+	return CombatMath.category_multiplier_percent(_effect_total(combatant, kind))
+
+
+## Higher is stronger. A reduction of special damage is stronger when the magnitude is lower.
+func _strength(effect: ActiveEffect) -> int:
+	if effect.kind == ActiveEffect.Kind.SPECIAL_RECEIVED_PERCENT:
+		return -effect.magnitude
+	return effect.magnitude
 
 
 ## Every outcome of one physical strike. One entry per possible base, each equally likely, lowest base first.

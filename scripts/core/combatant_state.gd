@@ -67,6 +67,9 @@ var health: int
 ## Abilities of this fighter, in display and AI scan order. Ids are unique and known to AbilityCatalog.
 var ability_ids: Array[String]
 
+## Effects active on this fighter. Empty in the control battle. Copied with the fighter.
+var effects: Array[ActiveEffect]
+
 
 func _init() -> void:
 	id = ""
@@ -87,3 +90,4 @@ func _init() -> void:
 	knowledge = 3
 	health = 3
 	ability_ids = []
+	effects = []

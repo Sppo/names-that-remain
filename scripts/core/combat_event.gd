@@ -16,6 +16,8 @@ enum Kind {
 	PREPARED_STRIKE,
 	MISSED,
 	GUARD_PLACED,
+	EFFECT_APPLIED,
+	EFFECT_EXPIRED,
 }
 
 ## How a landed hit was reduced. NONE means the listed hit was not reduced.
@@ -43,6 +45,8 @@ var mitigation: CombatEvent.Mitigation
 ## Ability damage after armor, before block, cover, and the remaining-health cap. 0 when unused.
 ## With armor 0 and neutral stats this is the number from the ability card.
 var listed_amount: int
+## Set on EFFECT_APPLIED and EFFECT_EXPIRED. Empty for every other kind.
+var effect_id: String
 
 
 func _init() -> void:
@@ -61,6 +65,7 @@ func _init() -> void:
 	outcome = CombatState.Outcome.ONGOING
 	mitigation = CombatEvent.Mitigation.NONE
 	listed_amount = 0
+	effect_id = ""
 
 
 static func stepped(actor_id: String, from_position: int, to_position: int) -> CombatEvent:
@@ -196,6 +201,34 @@ static func healed(
 	event.other_id = target_id
 	event.amount = amount
 	event.resulting_hp = resulting_hp
+	return event
+
+
+## amount is the magnitude. resulting_hp is the turns left after this application.
+static func effect_applied(
+	source_id: String,
+	target_id: String,
+	effect_id: String,
+	magnitude: int,
+	turns_left: int
+) -> CombatEvent:
+	var event := CombatEvent.new()
+	event.kind = CombatEvent.Kind.EFFECT_APPLIED
+	event.actor_id = source_id
+	event.other_id = target_id
+	event.effect_id = effect_id
+	event.amount = magnitude
+	event.resulting_hp = turns_left
+	return event
+
+
+## amount is the magnitude that just stopped applying.
+static func effect_expired(target_id: String, effect_id: String, magnitude: int) -> CombatEvent:
+	var event := CombatEvent.new()
+	event.kind = CombatEvent.Kind.EFFECT_EXPIRED
+	event.actor_id = target_id
+	event.effect_id = effect_id
+	event.amount = magnitude
 	return event
 
 
