@@ -7,7 +7,7 @@ extends RefCounted
 var actor_id: String
 var ability_id: String
 var target_id: String
-## Own-side position for an ability that moves the actor. 0 means unused. Not read by the rules yet.
+## Own-side position for an ability that moves the actor, such as Maneuver. 0 means unused. Other abilities do not read it.
 var destination_position: int
 
 

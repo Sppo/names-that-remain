@@ -2,6 +2,7 @@ class_name AbilityCatalog
 extends RefCounted
 
 ## Abilities for the first battle, plus the warrior's cover and the cultist's rite.
+## Hero cards of the new model are listed after them. No control fighter has them in ids_for.
 
 
 static func definition(ability_id: String) -> AbilityDefinition:
@@ -42,6 +43,56 @@ static func definition(ability_id: String) -> AbilityDefinition:
 				8,
 				50,
 				"5 шкоди. 8, якщо поточне здоров'я цілі не вище половини максимуму."
+			)
+		"warrior_sword":
+			return _rolled_strike(_make("warrior_sword", "Удар мечем", 1, 2, 1, 2, 0, true, AbilityDefinition.Kind.STRIKE, 0), 4, 6, 100, 0)
+		"warrior_shield_push":
+			var push := _rolled_strike(_make("warrior_shield_push", "Щитовий поштовх", 1, 2, 1, 2, 0, true, AbilityDefinition.Kind.STRIKE, 2), 2, 4, 100, 0)
+			push.pushes_target = true
+			return push
+		"warrior_battle_stance":
+			return _self_effect(
+				_make("warrior_battle_stance", "Бойова стійка", 1, 4, 1, 4, 0, false, AbilityDefinition.Kind.EFFECT, 3),
+				"battle_stance",
+				ActiveEffect.Kind.BLOCK_POINTS,
+				50
+			)
+		"hunter_bow_shot":
+			return _rolled_strike(_make("hunter_bow_shot", "Постріл", 2, 4, 1, 4, 0, true, AbilityDefinition.Kind.STRIKE, 0), 3, 5, 0, 100)
+		"hunter_dagger":
+			return _rolled_strike(_make("hunter_dagger", "Ніж", 1, 2, 1, 1, 0, true, AbilityDefinition.Kind.STRIKE, 0), 5, 7, 40, 60)
+		"hunter_aimed_shot":
+			var aimed := _rolled_strike(_make("hunter_aimed_shot", "Прицільний постріл", 2, 4, 2, 4, 0, true, AbilityDefinition.Kind.STRIKE, 2), 3, 5, 0, 100)
+			aimed.accuracy_bonus = 15
+			return aimed
+		"hunter_maneuver":
+			var maneuver := _self_effect(
+				_make("hunter_maneuver", "Маневр", 1, 4, 1, 4, 0, false, AbilityDefinition.Kind.MANEUVER, 3),
+				"maneuver_dodge",
+				ActiveEffect.Kind.DODGE_POINTS,
+				20
+			)
+			maneuver.target_mode = AbilityDefinition.TargetMode.OWN_ADJACENT
+			return maneuver
+		"medic_crossbow":
+			return _rolled_strike(_make("medic_crossbow", "Арбалетний постріл", 2, 4, 1, 4, 0, true, AbilityDefinition.Kind.STRIKE, 0), 2, 4, 0, 100)
+		"medic_healing":
+			var healing := _make("medic_healing", "Зцілення", 3, 4, 1, 4, 4, false, AbilityDefinition.Kind.HEAL, 2)
+			healing.knowledge_percent = 100
+			return healing
+		"medic_tincture":
+			return _effect(
+				_make("medic_tincture", "Настоянка стійкості", 1, 4, 1, 4, 0, false, AbilityDefinition.Kind.EFFECT, 3),
+				"resilience_tincture",
+				ActiveEffect.Kind.SPECIAL_RECEIVED_PERCENT,
+				-40
+			)
+		"medic_stimulant":
+			return _effect(
+				_make("medic_stimulant", "Бойовий стимулятор", 2, 4, 1, 4, 0, false, AbilityDefinition.Kind.EFFECT, 3),
+				"combat_stimulant",
+				ActiveEffect.Kind.PHYSICAL_DEALT_PERCENT,
+				30
 			)
 		_:
 			return null
@@ -106,3 +157,32 @@ static func _finish(ability: AbilityDefinition, finish_amount: int, below_percen
 	ability.finish_below_percent = below_percent
 	ability.hint = hint
 	return ability
+
+
+## Physical strike with a rolled base. The two shares sum to 100.
+static func _rolled_strike(
+	ability: AbilityDefinition,
+	base_min: int,
+	base_max: int,
+	strength_percent: int,
+	dexterity_percent: int
+) -> AbilityDefinition:
+	ability.base_min = base_min
+	ability.base_max = base_max
+	ability.strength_percent = strength_percent
+	ability.dexterity_percent = dexterity_percent
+	return ability
+
+
+## Every hero effect lasts two own turns of the target.
+static func _effect(ability: AbilityDefinition, effect_id: String, kind: ActiveEffect.Kind, magnitude: int) -> AbilityDefinition:
+	ability.effect_id = effect_id
+	ability.effect_kind = kind
+	ability.effect_magnitude = magnitude
+	ability.effect_turns = 2
+	return ability
+
+
+static func _self_effect(ability: AbilityDefinition, effect_id: String, kind: ActiveEffect.Kind, magnitude: int) -> AbilityDefinition:
+	ability.target_mode = AbilityDefinition.TargetMode.SELF
+	return _effect(ability, effect_id, kind, magnitude)

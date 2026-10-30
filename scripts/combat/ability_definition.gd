@@ -8,6 +8,18 @@ enum Kind {
 	HEAL,
 	GUARD,
 	RITE,
+	## Puts the card's effect on the target. No rolls.
+	EFFECT,
+	## Moves the actor to the command's destination_position, then puts the card's effect on the actor. No rolls.
+	MANEUVER,
+}
+
+## SLOTS: a fighter in the target slots. SELF: the actor only.
+## OWN_ADJACENT: the actor only, moving to a neighboring slot of its own side, empty or held by an ally.
+enum TargetMode {
+	SLOTS,
+	SELF,
+	OWN_ADJACENT,
 }
 
 enum DamageType {
@@ -34,7 +46,7 @@ var kind: AbilityDefinition.Kind
 var cooldown_turns: int
 
 ## Fields below feed the strike table in CombatRules. Defaults keep the control card unchanged.
-## Heal and guard do not read damage_type.
+## Heal and guard do not read damage_type. A heal with a knowledge share uses the healing formula on amount.
 var damage_type: AbilityDefinition.DamageType
 ## Both 0: fixed base amount, no roll. Otherwise 1 <= base_min <= base_max.
 var base_min: int
@@ -49,6 +61,16 @@ var multiplier_percent: int
 var accuracy_bonus: int
 ## A prepared strike lands on a living target without rolls.
 var guaranteed_hit: bool
+
+var target_mode: AbilityDefinition.TargetMode
+## Effect put on the target by EFFECT and MANEUVER. Empty effect_id means none.
+var effect_id: String
+var effect_kind: ActiveEffect.Kind
+var effect_magnitude: int
+## Own turns of the target.
+var effect_turns: int
+## A landed hit moves a target that is still alive one slot back, swapping with whoever stands there.
+var pushes_target: bool
 
 
 func _init() -> void:
@@ -74,3 +96,9 @@ func _init() -> void:
 	multiplier_percent = 100
 	accuracy_bonus = 0
 	guaranteed_hit = false
+	target_mode = AbilityDefinition.TargetMode.SLOTS
+	effect_id = ""
+	effect_kind = ActiveEffect.Kind.DODGE_POINTS
+	effect_magnitude = 0
+	effect_turns = 0
+	pushes_target = false

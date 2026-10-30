@@ -86,11 +86,30 @@ func validate_ability(command: AbilityCommand, state: CombatState) -> CombatResu
 	if target.position < ability.target_min or target.position > ability.target_max:
 		return CombatResult.Rejection.ILLEGAL_TARGET
 
+	# A fighter still listed at hp 0 is a broken state: no heal, cover or effect lands on it, Maneuver's included.
+	if target.hp <= 0 and (
+		ability.kind == AbilityDefinition.Kind.HEAL
+		or ability.kind == AbilityDefinition.Kind.GUARD
+		or ability.kind == AbilityDefinition.Kind.EFFECT
+		or ability.kind == AbilityDefinition.Kind.MANEUVER
+	):
+		return CombatResult.Rejection.ILLEGAL_TARGET
+
+	if ability.target_mode != AbilityDefinition.TargetMode.SLOTS and target.id != actor.id:
+		return CombatResult.Rejection.ILLEGAL_TARGET
+
+	if ability.target_mode == AbilityDefinition.TargetMode.OWN_ADJACENT:
+		var destination := command.destination_position
+		if destination < CombatantState.FRONT_POSITION or destination > CombatantState.REAR_POSITION:
+			return CombatResult.Rejection.POSITION_OUT_OF_RANGE
+		if absi(destination - actor.position) != 1:
+			return CombatResult.Rejection.NOT_ADJACENT
+
 	return CombatResult.Rejection.NONE
 
 
 ## Copies state on success. A rejection returns the same state object.
-## A strike may miss, be blocked, or be reduced by cover. Healing, cover, and a rite do not roll.
+## A strike may miss, be blocked, or be reduced by cover. Healing, cover, a rite, an effect and a maneuver do not roll.
 ## Health at 0 then uses the same expulsion as a step.
 ## A prepared strike for this actor replaces the command while its target is still alive.
 func resolve_ability(command: AbilityCommand, state: CombatState, rng: RandomNumberGenerator) -> CombatResult:
@@ -101,14 +120,24 @@ func resolve_ability(command: AbilityCommand, state: CombatState, rng: RandomNum
 	if rejection != CombatResult.Rejection.NONE:
 		return CombatResult.rejected(state, rejection)
 
-	# The strike table is built before any roll, so a formula that fails changes nothing.
+	# The strike table and the heal are built before any roll, so a formula that fails changes nothing.
 	var outcome: StrikeOutcome = null
+	var heal := 0
 	var ability := AbilityCatalog.definition(command.ability_id)
 	if ability.kind == AbilityDefinition.Kind.STRIKE:
 		var target := _find(state, command.target_id)
 		outcome = strike_outcome(_find(state, command.actor_id), target, ability, target.guard_reduction)
 		if outcome == null:
 			return CombatResult.rejected(state, CombatResult.Rejection.CALCULATION_FAILED)
+	elif ability.kind == AbilityDefinition.Kind.HEAL:
+		var healed: Variant = heal_for(_find(state, command.actor_id), ability)
+		if healed == null:
+			return CombatResult.rejected(state, CombatResult.Rejection.CALCULATION_FAILED)
+		heal = healed
+	elif ability.kind == AbilityDefinition.Kind.EFFECT or ability.kind == AbilityDefinition.Kind.MANEUVER:
+		var effect_rejection := _validate_grant(state, command.target_id, _card_effect(ability))
+		if effect_rejection != CombatResult.Rejection.NONE:
+			return CombatResult.rejected(state, effect_rejection)
 
 	var next := _copy_state(state)
 	var events: Array[CombatEvent] = []
@@ -117,7 +146,7 @@ func resolve_ability(command: AbilityCommand, state: CombatState, rng: RandomNum
 
 	_clear_stale_prepared(next, command.actor_id)
 	if validate_ability(command, next) == CombatResult.Rejection.NONE:
-		_apply_ability(next, command, events, rng, outcome)
+		_apply_ability(next, command, events, rng, outcome, heal)
 
 	return CombatResult.resolved(next, events)
 
@@ -232,6 +261,19 @@ func preview_attack(command: AbilityCommand, state: CombatState) -> AttackPrevie
 	return preview(command.actor_id, command.ability_id, command.target_id, state)
 
 
+## Health one use of a heal would give before the target's missing health caps it.
+## A knowledge share uses CombatMath.heal_amount on the card's amount; without one the amount is fixed, like doctor_heal.
+## Null when a formula fails.
+func heal_for(actor: CombatantState, ability: AbilityDefinition) -> Variant:
+	if ability.knowledge_percent == 0:
+		return ability.amount
+	var knowledge: Variant = CombatMath.effective_stat_x100(actor.knowledge, 0, 0)
+	if knowledge == null:
+		return null
+	var neutral := CombatMath.category_multiplier_percent(0)
+	return CombatMath.heal_amount(ability.amount, ability.multiplier_percent, knowledge, neutral, neutral)
+
+
 ## Every outcome of one strike by actor on target, without rolling and without changing either fighter.
 ## The fixed base is the card number, or the finishing number at low health. guard is the cover counted on the target.
 ## Null when a formula fails; the reason is already reported with push_error.
@@ -314,44 +356,58 @@ func _acts_before(a: CombatantState, b: CombatantState) -> bool:
 
 func _apply_step(state: CombatState, command: StepCommand, events: Array[CombatEvent]) -> void:
 	var actor := _find(state, command.actor_id)
-	var from_position := actor.position
-	var occupant := _find_at(state, actor.side, command.destination_position)
-	if occupant == null:
-		actor.position = command.destination_position
-		events.append(CombatEvent.stepped(actor.id, from_position, command.destination_position))
-	else:
-		occupant.position = from_position
-		actor.position = command.destination_position
-		events.append(CombatEvent.swapped(
-			actor.id,
-			occupant.id,
-			from_position,
-			command.destination_position
-		))
-
+	_move_actor(state, actor, command.destination_position, events)
 	_close_actor_turn(state, actor.id, events, "")
 
 
+## Step and Maneuver: to an empty slot, or swap with the ally standing there.
+func _move_actor(
+	state: CombatState,
+	actor: CombatantState,
+	destination: int,
+	events: Array[CombatEvent]
+) -> void:
+	var from_position := actor.position
+	var occupant := _find_at(state, actor.side, destination)
+	if occupant == null:
+		actor.position = destination
+		events.append(CombatEvent.stepped(actor.id, from_position, destination))
+	else:
+		occupant.position = from_position
+		actor.position = destination
+		events.append(CombatEvent.swapped(actor.id, occupant.id, from_position, destination))
+
+
 ## outcome is the strike table built before the copy; null for abilities that do not strike.
+## heal is the amount built before the copy; read only by a heal.
 func _apply_ability(
 	state: CombatState,
 	command: AbilityCommand,
 	events: Array[CombatEvent],
 	rng: RandomNumberGenerator,
-	outcome: StrikeOutcome
+	outcome: StrikeOutcome,
+	heal: int
 ) -> void:
 	var actor := _find(state, command.actor_id)
 	var ability := AbilityCatalog.definition(command.ability_id)
 	var target := _find(state, command.target_id)
 	match ability.kind:
 		AbilityDefinition.Kind.HEAL:
-			_apply_heal(actor, ability, target, events)
+			_apply_heal(actor, ability, target, heal, events)
 		AbilityDefinition.Kind.GUARD:
 			_apply_guard(state, actor, ability, target, events)
 		AbilityDefinition.Kind.RITE:
 			_apply_rite(state, actor, ability, target, events)
+		AbilityDefinition.Kind.EFFECT:
+			_grant_on(state, actor.id, target.id, _card_effect(ability), events)
+		AbilityDefinition.Kind.MANEUVER:
+			_move_actor(state, actor, command.destination_position, events)
+			_grant_on(state, actor.id, actor.id, _card_effect(ability), events)
 		_:
-			_resolve_hit(actor, target, ability.id, outcome, rng, events)
+			var landed := _resolve_hit(actor, target, ability.id, outcome, rng, events)
+			# A landed push moves a living target even at 0 damage, before or after armor. A killed target stays where it fell.
+			if ability.pushes_target and landed and target.hp > 0:
+				_push_back(state, target, events)
 
 	if _has_non_positive_hp(state):
 		_expel_non_positive_hp(state, events)
@@ -363,10 +419,11 @@ func _apply_heal(
 	actor: CombatantState,
 	ability: AbilityDefinition,
 	target: CombatantState,
+	heal: int,
 	events: Array[CombatEvent]
 ) -> void:
 	var room := maxi(target.max_hp - target.hp, 0)
-	var gained := mini(ability.amount, room)
+	var gained := mini(heal, room)
 	target.hp += gained
 	events.append(CombatEvent.healed(actor.id, ability.id, target.id, gained, target.hp))
 
@@ -385,6 +442,40 @@ func _apply_guard(
 		else:
 			combatant.guard_reduction = 0
 	events.append(CombatEvent.guard_placed(actor.id, ability.id, target.id, ability.amount))
+
+
+## One slot back. Whoever stands there takes the target's old slot. No roll.
+func _push_back(state: CombatState, target: CombatantState, events: Array[CombatEvent]) -> void:
+	var from_position := target.position
+	var to_position := from_position + 1
+	if to_position > CombatantState.REAR_POSITION:
+		return
+	var shifts: Array[PositionShift] = []
+	var occupant := _find_at(state, target.side, to_position)
+	target.position = to_position
+	shifts.append(_shift(target.id, from_position, to_position))
+	if occupant != null:
+		occupant.position = from_position
+		shifts.append(_shift(occupant.id, to_position, from_position))
+	events.append(CombatEvent.formation_shifted(target.side, shifts))
+
+
+func _shift(combatant_id: String, from_position: int, to_position: int) -> PositionShift:
+	var shift := PositionShift.new()
+	shift.combatant_id = combatant_id
+	shift.from_position = from_position
+	shift.to_position = to_position
+	return shift
+
+
+## The effect a card puts on its target, as a template for _grant_on.
+func _card_effect(ability: AbilityDefinition) -> ActiveEffect:
+	var effect := ActiveEffect.new()
+	effect.effect_id = ability.effect_id
+	effect.kind = ability.effect_kind
+	effect.magnitude = ability.effect_magnitude
+	effect.turns_left = ability.effect_turns
+	return effect
 
 
 func _apply_rite(
@@ -420,6 +511,7 @@ func _listed_strike(ability: AbilityDefinition, target: CombatantState) -> int:
 
 ## Rolls in the approved order: hit; the base only when it has a range; block on every hit, even at 0%.
 ## A miss rolls once, a fixed base twice, a range three times. The numbers come from outcome.
+## True when the strike landed, whatever damage was left after block and cover.
 func _resolve_hit(
 	actor: CombatantState,
 	target: CombatantState,
@@ -427,15 +519,15 @@ func _resolve_hit(
 	outcome: StrikeOutcome,
 	rng: RandomNumberGenerator,
 	events: Array[CombatEvent]
-) -> void:
+) -> bool:
 	if outcome.guaranteed:
 		_apply_damage(actor, target, ability_id, outcome, 0, events, false)
-		return
+		return true
 
 	var hit_roll := rng.randi_range(1, 100)
 	if hit_roll > outcome.hit_chance:
 		events.append(CombatEvent.missed(actor.id, ability_id, target.id))
-		return
+		return false
 
 	var index := 0
 	if outcome.bases.size() > 1:
@@ -444,7 +536,7 @@ func _resolve_hit(
 
 	if outcome.special:
 		_apply_damage(actor, target, ability_id, outcome, index, events, false)
-		return
+		return true
 
 	var damage: int = outcome.on_hit[index]
 	var blocked := false
@@ -469,6 +561,7 @@ func _resolve_hit(
 		outcome.listed[index],
 		_mitigation(blocked, guarded)
 	))
+	return true
 
 
 func _mitigation(blocked: bool, guarded: bool) -> CombatEvent.Mitigation:

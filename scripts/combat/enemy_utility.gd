@@ -303,8 +303,12 @@ func _threat(state: CombatState, fighter: CombatantState) -> Variant:
 				return null
 			if listed > best:
 				best = listed
-		elif ability.kind == AbilityDefinition.Kind.HEAL and ability.amount > heal:
-			heal = ability.amount
+		elif ability.kind == AbilityDefinition.Kind.HEAL:
+			var healed: Variant = _rules.heal_for(fighter, ability)
+			if healed == null:
+				return null
+			if healed > heal:
+				heal = healed
 	return maxi(best, heal)
 
 

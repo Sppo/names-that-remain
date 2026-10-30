@@ -1,7 +1,7 @@
 class_name PositionShift
 extends RefCounted
 
-## One living fighter whose position number changed when a side compacted forward.
+## One living fighter whose position number changed: a side compacted forward, or a push moved it.
 
 var combatant_id: String
 var from_position: int
