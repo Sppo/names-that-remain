@@ -2,7 +2,7 @@ class_name AbilityCatalog
 extends RefCounted
 
 ## Abilities for the first battle, plus the warrior's cover and the cultist's rite.
-## Hero cards of the new model are listed after them. No control fighter has them in ids_for.
+## Hero and enemy cards of the new model are listed after them. No control fighter has them in ids_for.
 
 
 static func definition(ability_id: String) -> AbilityDefinition:
@@ -94,6 +94,19 @@ static func definition(ability_id: String) -> AbilityDefinition:
 				ActiveEffect.Kind.PHYSICAL_DEALT_PERCENT,
 				30
 			)
+		"guardian_shield_bash":
+			return _rolled_strike(_make("guardian_shield_bash", "Удар щитом", 1, 2, 1, 2, 0, true, AbilityDefinition.Kind.STRIKE, 0), 4, 6, 100, 0)
+		"cultist_arrow_shot":
+			return _rolled_strike(_make("cultist_arrow_shot", "Стріла", 2, 4, 1, 4, 0, true, AbilityDefinition.Kind.STRIKE, 0), 2, 4, 0, 100)
+		"cultist_strike":
+			return _rolled_strike(_make("cultist_strike", "Базовий удар", 1, 2, 1, 2, 0, true, AbilityDefinition.Kind.STRIKE, 0), 2, 3, 100, 0)
+		"shadowclaw_claw_strike":
+			return _rolled_strike(_make("shadowclaw_claw_strike", "Удар кігтями", 1, 2, 1, 4, 0, true, AbilityDefinition.Kind.STRIKE, 0), 4, 6, 30, 70)
+		"shadowclaw_finisher":
+			var finisher := _rolled_strike(_make("shadowclaw_finisher", "Добивання", 1, 2, 1, 4, 0, true, AbilityDefinition.Kind.STRIKE, 2), 4, 6, 30, 70)
+			finisher.target_hp_max_percent = 50
+			finisher.dealt_bonus_percent = 30
+			return finisher
 		_:
 			return null
 

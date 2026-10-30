@@ -71,6 +71,10 @@ var effect_magnitude: int
 var effect_turns: int
 ## A landed hit moves a target that is still alive one slot back, swapping with whoever stands there.
 var pushes_target: bool
+## Above 0: the target must have hp × 100 <= max_hp × this. 0 means no health condition.
+var target_hp_max_percent: int
+## Percent added to the actor's physical dealt category for this strike, next to its effects. Special damage ignores it.
+var dealt_bonus_percent: int
 
 
 func _init() -> void:
@@ -102,3 +106,5 @@ func _init() -> void:
 	effect_magnitude = 0
 	effect_turns = 0
 	pushes_target = false
+	target_hp_max_percent = 0
+	dealt_bonus_percent = 0

@@ -16,6 +16,7 @@ func _init(rules: CombatRules) -> void:
 	_rules = rules
 
 
+## Null only when there is no active fighter. Without offense, cover or an empty slot ahead it is a PassCommand.
 func choose(state: CombatState) -> Variant:
 	var actor := _active(state)
 	if actor == null:
@@ -27,6 +28,13 @@ func choose(state: CombatState) -> Variant:
 	var best_position := 0
 	var best_target_id := ""
 	var best_command: Variant = null
+	# Cover only, for a turn without any offensive option.
+	var guard_found := false
+	var guard_score := 0
+	var guard_position := 0
+	var guard_target_id := ""
+	var guard_command: Variant = null
+	var has_offense := false
 
 	for ability_id: String in actor.ability_ids:
 		var ability := AbilityCatalog.definition(ability_id)
@@ -42,6 +50,9 @@ func choose(state: CombatState) -> Variant:
 			var score: Variant = _score_ability(state, actor, ability, target)
 			if score == null:
 				continue
+			# An offensive option whose numbers fail is left out, so it does not count as offense either.
+			if ability.kind != AbilityDefinition.Kind.GUARD:
+				has_offense = true
 			if _beats(found, best_score, best_rank, best_position, best_target_id, score, _kind_rank(ability.kind), target.position, target.id):
 				found = true
 				best_score = score
@@ -49,6 +60,26 @@ func choose(state: CombatState) -> Variant:
 				best_position = target.position
 				best_target_id = target.id
 				best_command = command
+			if ability.kind == AbilityDefinition.Kind.GUARD and _beats(guard_found, guard_score, 0, guard_position, guard_target_id, score, 0, target.position, target.id):
+				guard_found = true
+				guard_score = score
+				guard_position = target.position
+				guard_target_id = target.id
+				guard_command = command
+
+	# No allowed strike or rite: one step toward slot 1 into an empty slot, else cover, else a pass.
+	# A swap with an ally is not that step. The control battle never gets here.
+	if not has_offense:
+		var forward := actor.position - 1
+		if forward >= CombatantState.FRONT_POSITION and _find_at(state, actor.side, forward) == null:
+			var advance := _step(actor.id, forward)
+			if _rules.validate(advance, state) == CombatResult.Rejection.NONE:
+				return advance
+		if guard_command != null:
+			return guard_command
+		var idle := PassCommand.new()
+		idle.actor_id = actor.id
+		return idle
 
 	var front := actor.position - 1
 	var rear := actor.position + 1
@@ -321,6 +352,8 @@ func _strike_reaches(hero: CombatantState, ability: AbilityDefinition, target: C
 		return false
 	if target.position < ability.target_min or target.position > ability.target_max:
 		return false
+	if not _rules.target_health_allows(ability, target):
+		return false
 	var wanted := hero.side
 	if ability.hits_enemies:
 		wanted = CombatantState.Side.ENEMIES if hero.side == CombatantState.Side.HEROES else CombatantState.Side.HEROES
@@ -379,6 +412,14 @@ func _find(state: CombatState, combatant_id: String) -> CombatantState:
 	for index in state.combatants.size():
 		var combatant: CombatantState = state.combatants[index]
 		if combatant.id == combatant_id:
+			return combatant
+	return null
+
+
+func _find_at(state: CombatState, side: CombatantState.Side, position: int) -> CombatantState:
+	for index in state.combatants.size():
+		var combatant: CombatantState = state.combatants[index]
+		if combatant.side == side and combatant.position == position:
 			return combatant
 	return null
 

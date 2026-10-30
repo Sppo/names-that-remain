@@ -20,6 +20,8 @@ enum Kind {
 	EFFECT_EXPIRED,
 	## A stored strike was dropped while resolving it. No health change and no roll.
 	PREPARED_STRIKE_CANCELLED,
+	## The active fighter ended the own turn without acting. No roll.
+	TURN_PASSED,
 }
 
 ## How a landed hit was reduced. NONE means the listed hit was not reduced.
@@ -250,6 +252,13 @@ static func effect_expired(target_id: String, effect_id: String, magnitude: int)
 	event.actor_id = target_id
 	event.effect_id = effect_id
 	event.amount = magnitude
+	return event
+
+
+static func turn_passed(actor_id: String) -> CombatEvent:
+	var event := CombatEvent.new()
+	event.kind = CombatEvent.Kind.TURN_PASSED
+	event.actor_id = actor_id
 	return event
 
 

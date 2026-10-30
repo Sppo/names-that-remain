@@ -2,7 +2,7 @@ class_name EnemyAi
 extends RefCounted
 
 ## Enemy turn. A due prepared strike is played before any other choice.
-## Every other legal strike, rite, guard, and step is scored in whole points.
+## Every other legal strike, rite, guard, and step is scored in whole points. Without any offense the turn may be a pass.
 ## 100 points is 1 health. The chosen command is one validate already accepts.
 ## choose_action does not roll and does not change the passed state.
 
@@ -18,6 +18,7 @@ func _init(rules: CombatRules = null) -> void:
 		_rules = rules
 
 
+## First legal neighboring step. Not used by take_turn: it is not a fallback for a turn without a choice.
 func choose_step(state: CombatState) -> StepCommand:
 	var actor := _active_combatant(state)
 	var toward_front := actor.position - 1
@@ -33,7 +34,8 @@ func choose_step(state: CombatState) -> StepCommand:
 		if _rules.validate(command, state) == CombatResult.Rejection.NONE:
 			return command
 
-	return _command(actor.id, actor.position)
+	# Every slot has a neighbor, so this is not reached. take_turn no longer falls back to a step.
+	return null
 
 
 ## Null only when the active fighter's prepared strike still has a living target.
@@ -68,7 +70,13 @@ func _resolve_chosen(state: CombatState, rng: RandomNumberGenerator) -> CombatRe
 		return _rules.resolve_ability(action, state, rng)
 	if action is StepCommand:
 		return _rules.resolve(action, state, rng)
-	return _rules.resolve(choose_step(state), state, rng)
+	if action is PassCommand:
+		return _rules.resolve_pass(action, state, rng)
+	# No active fighter: the pass is rejected without changes.
+	var nobody := PassCommand.new()
+	if not state.turn_queue.is_empty():
+		nobody.actor_id = state.turn_queue[0]
+	return _rules.resolve_pass(nobody, state, rng)
 
 
 func _is_alive(state: CombatState, combatant_id: String) -> bool:

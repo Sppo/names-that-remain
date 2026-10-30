@@ -52,6 +52,41 @@ func resolve(command: StepCommand, state: CombatState, rng: RandomNumberGenerato
 	return CombatResult.resolved(next, events)
 
 
+func validate_pass(command: PassCommand, state: CombatState) -> CombatResult.Rejection:
+	if state.outcome != CombatState.Outcome.ONGOING:
+		return CombatResult.Rejection.BATTLE_FINISHED
+	var actor := _find(state, command.actor_id)
+	if actor == null:
+		return CombatResult.Rejection.UNKNOWN_ACTOR
+	if state.turn_queue.is_empty() or state.turn_queue[0] != actor.id:
+		return CombatResult.Rejection.NOT_ACTIVE_TURN
+	return CombatResult.Rejection.NONE
+
+
+## Copies state on success. A rejection returns the same state object.
+## A prepared strike for this actor replaces the pass, with its own rolls, and no TURN_PASSED is emitted.
+## Otherwise the turn closes like a step without moving: cooldowns and effects tick, the queue moves on, nothing rolls.
+func resolve_pass(command: PassCommand, state: CombatState, rng: RandomNumberGenerator) -> CombatResult:
+	if _prepared_consumes_turn(state, command.actor_id):
+		return resolve_prepared_strike(state, rng)
+
+	var rejection := validate_pass(command, state)
+	if rejection != CombatResult.Rejection.NONE:
+		return CombatResult.rejected(state, rejection)
+
+	var next := _copy_state(state)
+	var events: Array[CombatEvent] = []
+	if _has_non_positive_hp(next):
+		_expel_non_positive_hp(next, events)
+
+	_clear_stale_prepared(next, command.actor_id)
+	if validate_pass(command, next) == CombatResult.Rejection.NONE:
+		events.append(CombatEvent.turn_passed(command.actor_id))
+		_close_actor_turn(next, command.actor_id, events, "")
+
+	return CombatResult.resolved(next, events)
+
+
 func validate_ability(command: AbilityCommand, state: CombatState) -> CombatResult.Rejection:
 	if state.outcome != CombatState.Outcome.ONGOING:
 		return CombatResult.Rejection.BATTLE_FINISHED
@@ -84,6 +119,9 @@ func validate_ability(command: AbilityCommand, state: CombatState) -> CombatResu
 		return CombatResult.Rejection.ILLEGAL_TARGET
 
 	if target.position < ability.target_min or target.position > ability.target_max:
+		return CombatResult.Rejection.ILLEGAL_TARGET
+
+	if not target_health_allows(ability, target):
 		return CombatResult.Rejection.ILLEGAL_TARGET
 
 	# A fighter still listed at hp 0 is a broken state: no heal, cover or effect lands on it, Maneuver's included.
@@ -261,6 +299,13 @@ func preview_attack(command: AbilityCommand, state: CombatState) -> AttackPrevie
 	return preview(command.actor_id, command.ability_id, command.target_id, state)
 
 
+## The card's health condition on the target, exact for odd max_hp. True when the card has none.
+func target_health_allows(ability: AbilityDefinition, target: CombatantState) -> bool:
+	if ability.target_hp_max_percent <= 0:
+		return true
+	return target.hp * 100 <= target.max_hp * ability.target_hp_max_percent
+
+
 ## Health one use of a heal would give before the target's missing health caps it.
 ## A knowledge share uses CombatMath.heal_amount on the card's amount; without one the amount is fixed, like doctor_heal.
 ## Null when a formula fails.
@@ -298,7 +343,7 @@ func stored_strike_outcome(
 
 
 ## round_half_up(base × A × M(P) × M_dealt × M_received) with this fighter's stats.
-## Physical damage uses the dealt category and a neutral received multiplier.
+## Physical damage uses the dealt category with the card's dealt bonus, and a neutral received multiplier.
 ## Special damage uses the target's received category and does not take physical dealt bonuses.
 ## target may be null when the number is not aimed at anyone yet. Null when a formula fails.
 func damage_before_armor_for(
@@ -329,7 +374,9 @@ func damage_before_armor_for(
 		if target != null:
 			received = special_received_multiplier_percent(target)
 	else:
-		dealt = _category_multiplier(actor, ActiveEffect.Kind.PHYSICAL_DEALT_PERCENT)
+		# The card's own bonus joins the effects of the same category before the −60…+100 bound.
+		var dealt_total := _effect_total(actor, ActiveEffect.Kind.PHYSICAL_DEALT_PERCENT) + ability.dealt_bonus_percent
+		dealt = CombatMath.category_multiplier_percent(dealt_total)
 	return CombatMath.damage_before_armor(base, ability.multiplier_percent, weighted, dealt, received)
 
 
